@@ -244,6 +244,7 @@ int pwm_motorDirection;
 double const SAMPLE_TIME = 0.04; // s
 double const UPPER_SATURATION_LIMIT = 255;
 double const LOWER_SATURATION_LIMIT = -255;
+double const MIN_PID_ERROR = 0.15;
 
 // VERY SLOW
 //double P = -1.46749932499104;
@@ -270,7 +271,6 @@ double p_term = 0;
 double i_term = 0;
 double d_term = 0;
 double preSat = 0;
-double pid_output = 0;
 double d_filter = 0;
 
 void setup()
@@ -350,33 +350,35 @@ void loop()
 
 	// Read pwm and motor direction data
 	receiveControlData(rxStateIst, rxStateSoll);
+	soll_motor_angle = motorAngle.angle;
 
 	// Convert encoder value to degree
 	current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
 
 	// Calculate error term (soll - ist)
-	soll_motor_angle = motorAngle.angle;
 	pid_error = current_motor_angle - soll_motor_angle;
+	if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
 
-	Serial.print("pid_error: ");
-	Serial.println(pid_error);
+
+	//Serial.print("pid_error: ");
+	//Serial.println(pid_error);
 
 	// Calculate output for motor
-	pid_output = pidController(pid_error);
+	double pid_control_value = pidController(pid_error);
 
-	Serial.print("pid_output: ");
-	Serial.println((int)pid_output);
+	//Serial.print("pid_control_value: ");
+	//Serial.println((int)pid_control_value);
 
 	// Configure direction value for motor
 	// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
-	if (pid_output < 0) {
+	if (pid_control_value < 0) {
 		digitalWrite(do_motorDirection, HIGH);
-		pid_output = pid_output*(-1);
+		pid_control_value = pid_control_value*(-1);
 	}
 	else digitalWrite(do_motorDirection, LOW);
 
 	// Rotate motor
-	analogWrite(do_pwm, (int)pid_output);
+	analogWrite(do_pwm, (int)pid_control_value);
 
 	delay((SAMPLE_TIME/2) * 1000);
 
@@ -403,6 +405,8 @@ void loop()
 
 double pidController(double error) {
 
+	double pid_output = 0;
+
 	// Calculate p term
 	p_term = P * error;
 
@@ -423,6 +427,8 @@ double pidController(double error) {
 	else pid_output = preSat;
 
 	d_filter = d_filter + d_term*SAMPLE_TIME;
+
+	return pid_output;
 }
 
 bool clamp(double preSat, double preIntegrator) {
