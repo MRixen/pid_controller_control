@@ -235,34 +235,64 @@ int counter = 1;
 
 
 // PDI controller data
-const double ENCODER_TO_DEGREE = ((double)360 / 34608);
 const int MULTIPLICATION_FACTOR = 10;
 
 long encoderValue = 0;
 int pwm_motorDirection;
 
-double const SAMPLE_TIME = 0.04; // s
+double const SAMPLE_TIME = 0.05; // s
 double const UPPER_SATURATION_LIMIT = 255;
 double const LOWER_SATURATION_LIMIT = -255;
 double const MIN_PID_ERROR = 0.15;
 
+// -----------------------------------------
+// PID CONTROLLER DATA
+// -----------------------------------------
+
+// -----------------------------------------
+// Premium gear motor (638810 - 12rpm)
+// -----------------------------------------
 // VERY SLOW
 //double P = -1.46749932499104;
 //double I = -0.115013862304265;
 //double D = 0.548945887967433;
 //double N = 0.862662739489541;
 
-// FAST AS POSSIBLE
-double P = -60.0661737867048;
-double I = -4.94953312365104;
-double D = -0.454950956464534;
-double N = 3.15338115327649;
+// FAST AS POSSIBLE (BEST RESULTS)
+//double P = -60.0661737867048;
+//double I = -4.94953312365104;
+//double D = -0.454950956464534;
+//double N = 3.15338115327649;
+
+//const double ENCODER_TO_DEGREE = ((double)360 / 34608);
 
 // TEST FOR FASTER RESPONSE AT 30deg SOLLVALUE
 //double P = -6.44036045007237;
 //double I = -2.12725533466775;
 //double D = 0.0227955275430827;
 //double N = 3.51293845336784;
+// -----------------------------------------
+// -----------------------------------------
+
+
+// -----------------------------------------
+// Econ gear motor (638340 - 19rpm)
+// -----------------------------------------
+// FAST AS POSSIBLE
+//double P = -12.8539033109958;
+//double I = -0.712646331260047;
+//double D = 0.343845666242764;
+//double N = 5.46914538556796;
+
+// TEST
+double P = -10.6155510552541;
+double I = -0.487958012814397;
+double D = 0.312079469943773;
+double N = 4.6424770619278;
+
+const double ENCODER_TO_DEGREE = 1;
+// -----------------------------------------
+// -----------------------------------------
 
 double soll_motor_angle = 0; // deg
 double pid_error;
@@ -282,7 +312,7 @@ void setup()
 	firstStart = true;
 
 	// USER CONFIGURATION
-	debugMode = false;
+	debugMode = true;
 
 	// Define I/Os
 	pinMode(do_csMcp2515, OUTPUT); // Set as input to enable pull up resistor. It's neccessary because the ss line is defined at pin 10 + 9
@@ -300,9 +330,9 @@ void setup()
 	initMcp2515();
 
 	// Set identifier, message length, etc.
-	mcp2515_init_tx_buffer0(REGISTER_TXBxSIDL_VALUE[0], REGISTER_TXBxSIDH_VALUE[0], BYTES_TO_SEND);
-	mcp2515_init_tx_buffer1(REGISTER_TXBxSIDL_VALUE[1], REGISTER_TXBxSIDH_VALUE[1], BYTES_TO_SEND);
-	mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
+	//mcp2515_init_tx_buffer0(REGISTER_TXBxSIDL_VALUE[0], REGISTER_TXBxSIDH_VALUE[0], BYTES_TO_SEND);
+	//mcp2515_init_tx_buffer1(REGISTER_TXBxSIDL_VALUE[1], REGISTER_TXBxSIDH_VALUE[1], BYTES_TO_SEND);
+	//mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
 
 	// Start timer to measure the program execution
 	errorTimerValue = millis();
@@ -329,20 +359,21 @@ void loop()
 	pwmValueTemp = 0;
 	motorIsActive = true;
 
-	// Move motor until 60deg to elmininate encoder offset 
-	while (firstStart) {
-		if (encoderValue < MAX_ENCODER_OFFSET) analogWrite(do_pwm, 50);
-		else {
-			analogWrite(do_pwm, 0);
-			firstStart = false;
-		}
-		Serial.print("firstValue: ");
-		Serial.println(encoderValue*ENCODER_TO_DEGREE);
-	}
+	// Move motor until 60deg to elmininate encoder offset (Only neccessary for premium gear motor (big motor)
+	//while (firstStart) {
+	//	if (encoderValue < MAX_ENCODER_OFFSET) analogWrite(do_pwm, 50);
+	//	else {
+	//		analogWrite(do_pwm, 0);
+	//		firstStart = false;
+	//	}
+	//	Serial.print("firstValue: ");
+	//	Serial.println(encoderValue*ENCODER_TO_DEGREE);
+	//}
 
 	// Wait until a message is received in buffer 0 or 1
 	while ((digitalRead(di_mcp2515_int_rec) == 1)) {
 		delay(1);
+		Serial.print("wait");
 	}
 
 	// Get current rx buffer
@@ -352,6 +383,7 @@ void loop()
 	receiveControlData(rxStateIst, rxStateSoll);
 	soll_motor_angle = motorAngle.angle;
 
+
 	// Convert encoder value to degree
 	current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
 
@@ -359,6 +391,7 @@ void loop()
 	pid_error = current_motor_angle - soll_motor_angle;
 	if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
 
+	Serial.print(encoderValue);
 
 	//Serial.print("pid_error: ");
 	//Serial.println(pid_error);
@@ -397,8 +430,8 @@ void loop()
 	sendBuffer[2] = highByte(encoderValueTemp);
 
 	//Send data to mcp
-	for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(sendBuffer[i], i, BYTES_TO_SEND);
-	mcp2515_execute_rts_command(0);
+	//for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(sendBuffer[i], i, BYTES_TO_SEND);
+	//mcp2515_execute_rts_command(0);
 
 	delay((SAMPLE_TIME / 2) * 1000);
 }
@@ -527,6 +560,7 @@ void mcp2515_execute_reset_command() {
 	while (REGISTER_CANSTAT_CONFIGURATION_MODE != (REGISTER_CANSTAT_CONFIGURATION_MODE & actualMode))
 	{
 		actualMode = mcp2515_execute_read_command(REGISTER_CANSTAT, do_csMcp2515);
+		Serial.print(actualMode);
 	}
 
 	if (debugMode) Serial.print("Mcp2515 reset succesfully and switch do mode ");
