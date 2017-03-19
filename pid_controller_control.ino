@@ -10,11 +10,11 @@
 
 union controlData
 {
-	short angle;
+	short data;
 	byte bytes[2];
 };
 
-controlData motorAngle;
+controlData motorAngle, motorVel;
 short pwmValueTemp = 0;
 bool motorIsActive = false;
 bool firstStart;
@@ -26,9 +26,9 @@ int encoderValueTemp = 0;
 long MAX_TIMEOUT = 2000;
 
 // USER DEFINED
-const int SLOW_DOWN_CODE = 2;
-const byte BYTE_TO_READ = 0x03;
-const byte BYTES_TO_SEND = 0x03;
+const int SLOW_DOWN_CODE = 4;
+const byte BYTE_TO_READ = 0x08;
+const byte BYTES_TO_SEND = 0x08;
 
 // ---- MCP SETUP BEGIN----
 const byte REGISTER_TXB0SIDL_VALUE = 0x40;
@@ -215,7 +215,20 @@ const byte SPI_INSTRUCTION_RTS_BUFFER2 = 0x84;
 const byte SPI_INSTRUCTION_READ_STATUS = 0xA0;
 const byte SPI_INSTRUCTION_RX_STATUS = 0xB0;
 const byte SPI_INSTRUCTION_BIT_MODIFY = 0x05;
-byte sendBuffer[3];
+
+// TODO: Expand content of the send byte array
+// CONTENT
+// 0. byte: Number of the task 
+// 1. byte: ID of the motor to move
+// 2-3. byte: Velocity to move the motor to the specified position
+// 4-5. byte: Endposition for the specific motor 
+// 6. byte: Direction of the motor
+// 7. byte: 
+
+// CONTENT
+// 0. byte: Direction of the motor
+// 1-2. byte: Current angle of motor
+byte sendBuffer[8];
 
 // GLOBAL DATA
 const long MAX_WAIT_TIME = 10000;
@@ -238,7 +251,7 @@ int counter = 1;
 const int MULTIPLICATION_FACTOR = 10;
 
 long encoderValue = 0;
-int pwm_motorDirection;
+int pwm_motorDirection, taskNumber, motorId, extraCondition;
 
 double const SAMPLE_TIME = 0.05; // s
 double const UPPER_SATURATION_LIMIT = 255;
@@ -310,6 +323,7 @@ void setup()
 
 	// Configure program data
 	firstStart = true;
+	extraCondition = false;
 
 	// USER CONFIGURATION
 	debugMode = true;
@@ -330,9 +344,9 @@ void setup()
 	initMcp2515();
 
 	// Set identifier, message length, etc.
-	//mcp2515_init_tx_buffer0(REGISTER_TXBxSIDL_VALUE[0], REGISTER_TXBxSIDH_VALUE[0], BYTES_TO_SEND);
-	//mcp2515_init_tx_buffer1(REGISTER_TXBxSIDL_VALUE[1], REGISTER_TXBxSIDH_VALUE[1], BYTES_TO_SEND);
-	//mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
+	mcp2515_init_tx_buffer0(REGISTER_TXBxSIDL_VALUE[0], REGISTER_TXBxSIDH_VALUE[0], BYTES_TO_SEND);
+	mcp2515_init_tx_buffer1(REGISTER_TXBxSIDL_VALUE[1], REGISTER_TXBxSIDH_VALUE[1], BYTES_TO_SEND);
+	mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
 
 	// Start timer to measure the program execution
 	errorTimerValue = millis();
@@ -373,7 +387,7 @@ void loop()
 	// Wait until a message is received in buffer 0 or 1
 	while ((digitalRead(di_mcp2515_int_rec) == 1)) {
 		delay(1);
-		Serial.print("wait");
+		Serial.println("wait");
 	}
 
 	// Get current rx buffer
@@ -381,8 +395,13 @@ void loop()
 
 	// Read pwm and motor direction data
 	receiveControlData(rxStateIst, rxStateSoll);
-	soll_motor_angle = motorAngle.angle;
+	soll_motor_angle = motorAngle.data;
 
+	//Serial.print("soll_motor_angle: ");
+	//Serial.println(soll_motor_angle);
+
+	//Serial.print("encoderValue: ");
+	//Serial.println(encoderValue);
 
 	// Convert encoder value to degree
 	current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
@@ -391,7 +410,7 @@ void loop()
 	pid_error = current_motor_angle - soll_motor_angle;
 	if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
 
-	Serial.print(encoderValue);
+	//Serial.print(encoderValue);
 
 	//Serial.print("pid_error: ");
 	//Serial.println(pid_error);
@@ -410,28 +429,37 @@ void loop()
 	}
 	else digitalWrite(do_motorDirection, LOW);
 
-	// Rotate motor
-	analogWrite(do_pwm, (int)pid_control_value);
+	// Rotate motor only if no task 2 selected (safe ref pos)
+	// THe user needs to rotate the motor manually....
+	if(extraCondition == 0) analogWrite(do_pwm, (int)pid_control_value);
 
 	delay((SAMPLE_TIME/2) * 1000);
 
 	// Send encoder value back to raspberry
 	encoderValueTemp = encoderValue*ENCODER_TO_DEGREE*MULTIPLICATION_FACTOR;
 
+	// Set specific data to byteArray (task no, motor id, etc.)
+	sendBuffer[0] = taskNumber;
+	sendBuffer[1] = motorId;
+	sendBuffer[2] = 0; // Set to zero because the server do nothing with it
+	sendBuffer[3] = 0; // Set to zero because the server do nothing with it
+	if (extraCondition == 0) sendBuffer[7] = 0; // Set to zero because the server do nothing with it
+	else sendBuffer[7] = 1;
+
 	// Write encoder direction to buffer
 	if (encoderValueTemp < 0) {
-		sendBuffer[0] = 0;
+		sendBuffer[6] = 0;
 		encoderValueTemp = encoderValueTemp*(-1);
 	}
-	else sendBuffer[0] = 1;
+	else sendBuffer[6] = 1;
 
 	// Write encoder value to buffer
-	sendBuffer[1] = lowByte(encoderValueTemp);
-	sendBuffer[2] = highByte(encoderValueTemp);
+	sendBuffer[4] = lowByte(encoderValueTemp);
+	sendBuffer[5] = highByte(encoderValueTemp);
 
 	//Send data to mcp
-	//for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(sendBuffer[i], i, BYTES_TO_SEND);
-	//mcp2515_execute_rts_command(0);
+	for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(sendBuffer[i], i, BYTES_TO_SEND);
+	mcp2515_execute_rts_command(0);
 
 	delay((SAMPLE_TIME / 2) * 1000);
 }
@@ -843,13 +871,24 @@ bool readControlValue(byte bufferId, int cs_pin)
 	//delay(SLOW_DOWN_CODE);
 
 	//for (int i = 0; i < BYTE_TO_READ; i++) {
+	//	Serial.print("returnMessage[");
+	//	Serial.print(i);
+	//	Serial.print("]: ");
 	//	Serial.println(returnMessage[i]);
 	//}
 
 	// Convert byte to short 
-	pwm_motorDirection = returnMessage[0];
-	motorAngle.bytes[0] = returnMessage[2];
-	motorAngle.bytes[1] = returnMessage[1];
+	taskNumber = returnMessage[0];
+	motorId = returnMessage[1];
+	motorVel.bytes[0] = returnMessage[2];
+	motorVel.bytes[0] = returnMessage[3];
+	motorAngle.bytes[0] = returnMessage[4];
+	motorAngle.bytes[1] = returnMessage[5];
+	pwm_motorDirection = returnMessage[6];
+	extraCondition = returnMessage[7];
+
+	Serial.print("extraCondition: ");
+	Serial.println(extraCondition);
 
 	//Serial.print("motorAngle.angle: ");
 	//Serial.println(motorAngle.angle);
