@@ -14,7 +14,8 @@ union controlData
 	byte bytes[2];
 };
 
-controlData motorAngle, motorVel;
+controlData motorAngle;
+int motorVel;
 short pwmValueTemp = 0;
 bool motorIsActive = false;
 bool firstStart;
@@ -27,7 +28,7 @@ long MAX_TIMEOUT = 2000;
 
 // USER DEFINED
 const int SLOW_DOWN_CODE = 4;
-const byte BYTE_TO_READ = 0x08;
+const byte BYTES_TO_READ = 0x08;
 const byte BYTES_TO_SEND = 0x08;
 
 // ---- MCP SETUP BEGIN----
@@ -258,6 +259,50 @@ double const UPPER_SATURATION_LIMIT = 255;
 double const LOWER_SATURATION_LIMIT = -255;
 double const MIN_PID_ERROR = 0.15;
 
+bool pid_controller_enabled = true;
+bool writeToEeprom_inUse = false;
+
+enum RobotActions
+{
+	action_nothingToDo,
+	action_newPosition,
+	action_saveToEeprom,
+	action_disablePidController,
+	action_enablePidController
+};
+
+enum Outgoing_Package_Content
+{
+	out_action,
+	out_motorId,
+	out_actionState
+};
+
+enum Incoming_Package_Content
+{
+	in_action,
+	in_motorId,
+	in_velocity,
+	in_angle_1,
+	in_angle_2,
+	in_motorDir
+};
+
+enum ActionStates
+{
+	state_init,
+	state_complete,
+	state_pending
+};
+
+RobotActions robotActions;
+Outgoing_Package_Content outgoing_Package_Content;
+Incoming_Package_Content incoming_Package_Content;
+ActionStates actionStates;
+
+byte incoming_data[BYTES_TO_READ];
+byte outgoing_data[BYTES_TO_SEND];
+
 // -----------------------------------------
 // PID CONTROLLER DATA
 // -----------------------------------------
@@ -316,6 +361,36 @@ double d_term = 0;
 double preSat = 0;
 double d_filter = 0;
 
+// ------------------
+// PACKAGE CONSTRUCT INCOMING
+// ------------------
+//
+// 0. byte: action
+// 1. byte: motor id
+// 2. byte: velocity
+// 3-4. byte: angle
+// 5. byte: Direction of the motor 
+// 6. byte: 
+// 7. byte: 
+// ------------------
+// ------------------
+
+// ------------------
+// PACKAGE CONSTRUCT OUTGOING
+// ------------------
+//
+// 0. byte: action
+// 1. byte: motor id
+// 2. byte: action state
+// 3. byte: 
+// 4. byte: 
+// 5. byte: 
+// 6. byte: 
+// 7. byte:                                   
+// ------------------
+// ------------------
+
+
 void setup()
 {
 	// Configure serial interface
@@ -357,21 +432,6 @@ void setup()
 
 	// Give time to set up
 	delay(100);
-}
-
-void loop()
-{
-	// MESSAGES COMING FROM RASPBERRY VIA CAN BUS:
-	// BYTE 1: DIRECTION OF MOTOR
-	// BYTE 2, 3: PWM VALUE
-
-	// MESSAGES GOING TO RASPBERRY VIA CAN BUS:
-	// BYTE 1: DIRECTION OF MOTOR
-	// BYTE 2, 3: ENCODER VALUE
-
-	rxStateIst = 0x00;
-	pwmValueTemp = 0;
-	motorIsActive = true;
 
 	// Move motor until 60deg to elmininate encoder offset (Only neccessary for premium gear motor (big motor)
 	//while (firstStart) {
@@ -383,79 +443,106 @@ void loop()
 	//	Serial.print("firstValue: ");
 	//	Serial.println(encoderValue*ENCODER_TO_DEGREE);
 	//}
+}
 
-	// Wait until a message is received in buffer 0 or 1
-	while ((digitalRead(di_mcp2515_int_rec) == 1)) {
-		delay(1);
-		Serial.println("wait");
+void loop()
+{
+	rxStateIst = 0x00;
+	pwmValueTemp = 0;
+	motorIsActive = true;
+
+	// Check if message is received in buffer 0 or 1
+	if ((digitalRead(di_mcp2515_int_rec) == 1))
+	{
+		// Get current rx buffer
+		rxStateIst = mcp2515_execute_read_state_command(do_csMcp2515);
+
+		// Read incoming data package
+		receiveControlData(rxStateIst, rxStateSoll);
+
+		// Wait after receive command
+		delay((SAMPLE_TIME / 2) * 1000);
 	}
 
-	// Get current rx buffer
-	rxStateIst = mcp2515_execute_read_state_command(do_csMcp2515);
+	// Re initialize outgoing data array
+	for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
 
-	// Read pwm and motor direction data
-	receiveControlData(rxStateIst, rxStateSoll);
-	soll_motor_angle = motorAngle.data;
-
-	//Serial.print("soll_motor_angle: ");
-	//Serial.println(soll_motor_angle);
-
-	//Serial.print("encoderValue: ");
-	//Serial.println(encoderValue);
-
-	// Convert encoder value to degree
-	current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
-
-	// Calculate error term (soll - ist)
-	pid_error = current_motor_angle - soll_motor_angle;
-	if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
-
-	//Serial.print(encoderValue);
-
-	//Serial.print("pid_error: ");
-	//Serial.println(pid_error);
-
-	// Calculate output for motor
-	double pid_control_value = pidController(pid_error);
-
-	//Serial.print("pid_control_value: ");
-	//Serial.println((int)pid_control_value);
-
-	// Configure direction value for motor
-	// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
-	if (pid_control_value < 0) {
-		digitalWrite(do_motorDirection, HIGH);
-		pid_control_value = pid_control_value*(-1);
+	// Check incoming action and set outgoing package
+	if ((incoming_data[in_action] == action_saveToEeprom) | (incoming_data[in_action] == action_disablePidController) | (incoming_data[in_action] == action_enablePidController) | (incoming_data[in_action] == action_newPosition))
+	{
+		outgoing_data[out_action] = incoming_data[in_action];
+		outgoing_data[out_actionState] = state_pending;
+		outgoing_data[out_motorId] = incoming_data[in_motorId];
 	}
-	else digitalWrite(do_motorDirection, LOW);
 
-	// Rotate motor only if no task 2 selected (safe ref pos)
-	// THe user needs to rotate the motor manually....
-	if(extraCondition == 0) analogWrite(do_pwm, (int)pid_control_value);
+	// Send package back to server
+	for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(outgoing_data[i], i, BYTES_TO_SEND);
+	mcp2515_execute_rts_command(0);
 
-	delay((SAMPLE_TIME/2) * 1000);
+	// Wait after send command
+	delay((SAMPLE_TIME / 2) * 1000);
 
-	// Send encoder value back to raspberry
-	encoderValueTemp = encoderValue*ENCODER_TO_DEGREE*MULTIPLICATION_FACTOR;
+	// Work on action <saveToEeprom>
+	if (incoming_data[in_action] == action_saveToEeprom)
+	{
+		if (!writeToEeprom_inUse)
+		{
+			writeToEeprom_inUse = true;
 
-	// Set specific data to byteArray (task no, motor id, etc.)
-	sendBuffer[0] = taskNumber;
-	sendBuffer[1] = motorId;
-	sendBuffer[2] = 0; // Set to zero because the server do nothing with it
-	sendBuffer[3] = 0; // Set to zero because the server do nothing with it
-	if (extraCondition == 0) sendBuffer[7] = 0; // Set to zero because the server do nothing with it
-	else sendBuffer[7] = 1;
-
-	// Write encoder direction to buffer
-	if (encoderValueTemp < 0) {
-		sendBuffer[6] = 0;
-		encoderValueTemp = encoderValueTemp*(-1);
+			// Reset state if position is written to eeprom
+			outgoing_data[out_actionState] = state_init;
+			writeToEeprom_inUse = false;
+		}
 	}
-	else sendBuffer[6] = 1;
 
-	// Write encoder value to buffer
-	sendBuffer[4] = lowByte(encoderValueTemp);
-	sendBuffer[5] = highByte(encoderValueTemp);
+	// Work on action <disablePidController>
+	if (incoming_data[in_action] == action_disablePidController)
+	{
+		pid_controller_enabled = false;
+		outgoing_data[out_actionState] = state_init;
+	}
+
+	// Work on action <enablePidController>
+	if (incoming_data[in_action] == action_enablePidController)
+	{
+		pid_controller_enabled = true;
+		outgoing_data[out_actionState] = state_init;
+	}
+
+	// Work on action <newPosition>
+	if (incoming_data[in_action] == action_newPosition)
+	{
+		// Convert byte to short 
+		motorAngle.bytes[0] = incoming_data[in_angle_1];
+		motorAngle.bytes[1] = incoming_data[in_angle_2];
+		soll_motor_angle = motorAngle.data;
+
+		// Reset state if position is reached
+		if(pid_error == 0) outgoing_data[out_actionState] = state_init;
+	}
+
+	if (pid_controller_enabled)
+	{
+		// Convert encoder value to degree
+		current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
+
+		// Calculate error term (soll - ist)
+		pid_error = current_motor_angle - soll_motor_angle;
+		if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
+
+		// Calculate output for motor
+		double pid_control_value = pidController(pid_error);
+
+		// Configure direction value for motor
+		// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
+		if (pid_control_value < 0) {
+			digitalWrite(do_motorDirection, HIGH);
+			pid_control_value = pid_control_value*(-1);
+		}
+		else digitalWrite(do_motorDirection, LOW);
+
+		analogWrite(do_pwm, (int)pid_control_value);
+	}
 
 	//Send data to mcp
 	for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(sendBuffer[i], i, BYTES_TO_SEND);
@@ -857,41 +944,14 @@ void writeSimpleCommandSpi(byte command, int cs_pin)
 
 bool readControlValue(byte bufferId, int cs_pin)
 {
-	// Read byte from can bus
-	// 1. byte: motor direction
-	// 2. + 3. byte: pwm value
-
-	byte returnMessage[BYTE_TO_READ];
+	byte returnMessage[BYTES_TO_READ];
 
 	// Read pwm value as byte from can bus
 	setCsPin(cs_pin, LOW);
 	SPI.transfer(bufferId);
-	for (int i = 0; i < BYTE_TO_READ; i++) returnMessage[i] = SPI.transfer(0x00);
+	for (int i = 0; i < BYTES_TO_READ; i++) incoming_data[i] = SPI.transfer(0x00);
 	setCsPin(cs_pin, HIGH);
 	//delay(SLOW_DOWN_CODE);
-
-	//for (int i = 0; i < BYTE_TO_READ; i++) {
-	//	Serial.print("returnMessage[");
-	//	Serial.print(i);
-	//	Serial.print("]: ");
-	//	Serial.println(returnMessage[i]);
-	//}
-
-	// Convert byte to short 
-	taskNumber = returnMessage[0];
-	motorId = returnMessage[1];
-	motorVel.bytes[0] = returnMessage[2];
-	motorVel.bytes[0] = returnMessage[3];
-	motorAngle.bytes[0] = returnMessage[4];
-	motorAngle.bytes[1] = returnMessage[5];
-	pwm_motorDirection = returnMessage[6];
-	extraCondition = returnMessage[7];
-
-	Serial.print("extraCondition: ");
-	Serial.println(extraCondition);
-
-	//Serial.print("motorAngle.angle: ");
-	//Serial.println(motorAngle.angle);
 
 	return true;
 }
@@ -919,6 +979,17 @@ void doEncoderA() {
 			encoderValue = encoderValue - 1;          // CCW
 		}
 	}
+
+	// Write encoderValue to eeprom
+	// Check if writing action is in progres
+	if (!writeToEeprom_inUse)
+	{
+		writeToEeprom_inUse = true;
+
+
+
+		writeToEeprom_inUse = false;
+	}
 }
 
 void doEncoderB() {
@@ -942,5 +1013,16 @@ void doEncoderB() {
 		else {
 			encoderValue = encoderValue - 1;          // CCW
 		}
+	}
+
+	// Write encoderValue to eeprom
+	// Check if writing action is in progres
+	if (!writeToEeprom_inUse)
+	{
+		writeToEeprom_inUse = true;
+
+
+
+		writeToEeprom_inUse = false;
 	}
 }
