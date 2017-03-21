@@ -1,8 +1,14 @@
+// ------------------------------------
+// Controlling motors with id 0 and 1
+// ------------------------------------
+
+#include <EEPROM.h>
 #include <SPI.h>
 
 #define di_encoderPinA 2
 #define di_encoderPinB 3
 #define do_motorDirection 4
+#define di_powerOn 5
 #define do_pwm 9
 #define do_csMcp2515 8
 #define do_csArduino 10
@@ -14,7 +20,7 @@ union controlData
 	byte bytes[2];
 };
 
-controlData motorAngle;
+controlData soll_motorAngle, ist_motorAngle, ref_pos;
 int motorVel;
 short pwmValueTemp = 0;
 bool motorIsActive = false;
@@ -261,6 +267,17 @@ double const MIN_PID_ERROR = 0.15;
 
 bool pid_controller_enabled = true;
 bool writeToEeprom_inUse = false;
+byte REFERENCE_POSITION[2];
+
+enum EepromAddresses
+{
+	eeprom_ref_pos_1,
+	eeprom_ref_pos_2,
+	eeprom_ref_pos_validate,
+	eeprom_act_pos_1,
+	eeprom_act_pos_2,
+	eeprom_act_pos_validate
+};
 
 enum RobotActions
 {
@@ -423,8 +440,29 @@ void setup()
 	mcp2515_init_tx_buffer1(REGISTER_TXBxSIDL_VALUE[1], REGISTER_TXBxSIDH_VALUE[1], BYTES_TO_SEND);
 	mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
 
-	// Start timer to measure the program execution
-	errorTimerValue = millis();
+	// Read last encoder value from eeprom
+	if (EEPROM.read(eeprom_act_pos_validate) == 1) {
+		ist_motorAngle.bytes[0] = EEPROM.read(eeprom_act_pos_1);
+		ist_motorAngle.bytes[1] = EEPROM.read(eeprom_act_pos_2);
+		encoderValue = ist_motorAngle.data;
+	}
+	else {
+		// TODO
+		// SHow error blink code with red state led 
+	}
+
+	// Read ref pos value from eeprom
+	if (EEPROM.read(eeprom_ref_pos_validate) == 1) {
+		ref_pos.bytes[0] = EEPROM.read(eeprom_ref_pos_1);
+		ref_pos.bytes[1] = EEPROM.read(eeprom_ref_pos_2);
+		// TODO:
+		// Convert motorId to array of ids to use motor id 0 and 1
+		REFERENCE_POSITION[motorId] = ref_pos.data;
+	}
+	else {
+		// TODO
+		// SHow error blink code with red state led 
+	}
 
 	// Attach interrupt for encoder
 	attachInterrupt(digitalPinToInterrupt(di_encoderPinA), doEncoderA, CHANGE);
@@ -432,6 +470,13 @@ void setup()
 
 	// Give time to set up
 	delay(100);
+
+	// Start timer to measure the program execution
+	errorTimerValue = millis();
+
+	// TODO:
+	// Turn green led on to show that everything was inititalized and maybe ok
+
 
 	// Move motor until 60deg to elmininate encoder offset (Only neccessary for premium gear motor (big motor)
 	//while (firstStart) {
@@ -485,14 +530,12 @@ void loop()
 	// Work on action <saveToEeprom>
 	if (incoming_data[in_action] == action_saveToEeprom)
 	{
-		if (!writeToEeprom_inUse)
-		{
-			writeToEeprom_inUse = true;
+		// Write actual motor position to eeprom (byte 0 and 1)
+		EEPROM.update(eeprom_ref_pos_1, lowByte(encoderValue));
+		EEPROM.update(eeprom_ref_pos_2, highByte(encoderValue));
 
-			// Reset state if position is written to eeprom
-			outgoing_data[out_actionState] = state_init;
-			writeToEeprom_inUse = false;
-		}
+		// Validate writing and reset state if position is written to eeprom
+		if ((EEPROM.read(eeprom_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_ref_pos_2) == highByte(encoderValue))) outgoing_data[out_actionState] = state_init;
 	}
 
 	// Work on action <disablePidController>
@@ -513,14 +556,15 @@ void loop()
 	if (incoming_data[in_action] == action_newPosition)
 	{
 		// Convert byte to short 
-		motorAngle.bytes[0] = incoming_data[in_angle_1];
-		motorAngle.bytes[1] = incoming_data[in_angle_2];
-		soll_motor_angle = motorAngle.data;
+		soll_motorAngle.bytes[0] = incoming_data[in_angle_1];
+		soll_motorAngle.bytes[1] = incoming_data[in_angle_2];
+		soll_motor_angle = soll_motorAngle.data;
 
 		// Reset state if position is reached
-		if(pid_error == 0) outgoing_data[out_actionState] = state_init;
+		if (pid_error == 0) outgoing_data[out_actionState] = state_init;
 	}
 
+	// Controll motor with pid
 	if (pid_controller_enabled)
 	{
 		// Convert encoder value to degree
@@ -542,6 +586,20 @@ void loop()
 		else digitalWrite(do_motorDirection, LOW);
 
 		analogWrite(do_pwm, (int)pid_control_value);
+	}
+
+	// Store actual encoder value to eeprom when raspberry pi is off
+	// Arduino gets the rest of power from a condensator
+	if (!digitalRead(di_powerOn) & !writeToEeprom_inUse)
+	{
+		// Write actual motor position to eeprom (byte 2 and 3)
+		EEPROM.update(eeprom_act_pos_1, lowByte(encoderValue));
+		EEPROM.update(eeprom_act_pos_2, highByte(encoderValue));
+
+		// Validate writing 
+		// Store ok byte to eeprom (read this at startup to validate)
+		if ((EEPROM.read(eeprom_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_act_pos_2) == highByte(encoderValue))) EEPROM.write(eeprom_act_pos_validate, 1);
+		else EEPROM.write(eeprom_act_pos_validate, 0);
 	}
 
 	//Send data to mcp
@@ -979,17 +1037,6 @@ void doEncoderA() {
 			encoderValue = encoderValue - 1;          // CCW
 		}
 	}
-
-	// Write encoderValue to eeprom
-	// Check if writing action is in progres
-	if (!writeToEeprom_inUse)
-	{
-		writeToEeprom_inUse = true;
-
-
-
-		writeToEeprom_inUse = false;
-	}
 }
 
 void doEncoderB() {
@@ -1013,16 +1060,5 @@ void doEncoderB() {
 		else {
 			encoderValue = encoderValue - 1;          // CCW
 		}
-	}
-
-	// Write encoderValue to eeprom
-	// Check if writing action is in progres
-	if (!writeToEeprom_inUse)
-	{
-		writeToEeprom_inUse = true;
-
-
-
-		writeToEeprom_inUse = false;
 	}
 }
