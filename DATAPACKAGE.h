@@ -36,23 +36,15 @@ union controlData
 
 controlData soll_motorAngle, ist_motorAngle, ref_pos;
 int motorVel;
-bool eeprom_states[2];
 
 
 enum EepromAddresses
 {
 	eeprom_addr_ref_pos_1,
 	eeprom_addr_ref_pos_2,
-	eeprom_addr_ref_pos_validate,
 	eeprom_addr_act_pos_1,
 	eeprom_addr_act_pos_2,
-	eeprom_addr_act_pos_validate
-};
-
-enum EepromStates
-{
-	eeprom_state_ref_pos,
-	eeprom_state_last_pos
+	eeprom_addr_error
 };
 
 enum RobotActions

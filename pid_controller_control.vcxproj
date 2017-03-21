@@ -47,10 +47,10 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\arduino\avr\libraries\EEPROM\src;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\arduino\avr\libraries\SPI\src;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\libraries;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\arduino\avr\libraries;$(ProjectDir)..\..\Arduino\libraries;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\arduino\avr\cores\arduino;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\arduino\avr\variants\eightanaloginputs;$(ProjectDir)..\pid_controller_control;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\tools\avr\avr\include\;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\tools\avr\avr\include\avr\;$(ProjectDir)..\..\..\..\..\Program Files (x86)\arduino-1.8.1\hardware\tools\avr\lib\gcc\avr\4.8.1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ForcedIncludeFiles>$(ProjectDir)__vm\.pid_controller_control.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories>C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\EEPROM\src;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\SPI\src;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\EEPROM\src\utility;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\SPI\src\utility;C:\Program Files (x86)\arduino-1.6.9\libraries;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries;C:\Users\Manuel.Rixen\Documents\Arduino\libraries;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\cores\arduino;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\variants\eightanaloginputs;C:\Users\Manuel.Rixen\Documents\GitHub\pid_controller_control;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\cores\arduino;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\variants\eightanaloginputs;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\EEPROM\src;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\SPI\src;C:\Program Files (x86)\arduino-1.6.9\libraries;C:\Program Files (x86)\arduino-1.6.9\hardware\arduino\avr\libraries;C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\lpupndyf.dnk\Micro Platforms\default\debuggers;C:\Users\Manuel.Rixen\Documents\Arduino\libraries;C:\Program Files (x86)\arduino-1.6.9\hardware\tools\avr/avr/include/;C:\Program Files (x86)\arduino-1.6.9\hardware\tools\avr//avr/include/avr/;C:\Program Files (x86)\arduino-1.6.9\hardware\tools\avr/lib\gcc\avr\4.8.1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>C:\Users\Manuel.Rixen\Documents\GitHub\pid_controller_control\__vm\.pid_controller_control.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-      <PreprocessorDefinitions>__AVR_ATmega328p__;__AVR_ATmega328P__;F_CPU=16000000L;ARDUINO=10801;ARDUINO_AVR_NANO;ARDUINO_ARCH_AVR;__cplusplus=201103L;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>__AVR_ATmega328p__;__AVR_ATmega328P__;F_CPU=16000000L;ARDUINO=10609;ARDUINO_AVR_NANO;ARDUINO_ARCH_AVR;__cplusplus=201103L;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -74,6 +74,8 @@
     <ProjectCapability Include="VisualMicro" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="mcp2515.ino" />
+    <None Include="pid.ino" />
     <None Include="pid_controller_control.ino">
       <FileType>CppCode</FileType>
     </None>
@@ -84,10 +86,6 @@
     <ClInclude Include="MCP2515.h" />
     <ClInclude Include="PID.h" />
     <ClInclude Include="__vm\.pid_controller_control.vsarduino.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="MCP2515.cpp" />
-    <ClCompile Include="PID.cpp" />
   </ItemGroup>
   <PropertyGroup>
     <DebuggerFlavor>VisualMicroDebugger</DebuggerFlavor>

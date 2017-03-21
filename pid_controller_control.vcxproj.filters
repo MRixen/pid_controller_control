@@ -16,6 +16,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="pid_controller_control.ino" />
+    <None Include="mcp2515.ino" />
+    <None Include="pid.ino" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.pid_controller_control.vsarduino.h">
@@ -33,13 +35,5 @@
     <ClInclude Include="DEFINITIONS.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="MCP2515.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="PID.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>

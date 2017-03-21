@@ -1,4 +1,3 @@
-#pragma once
 #define di_encoderPinA 2
 #define di_encoderPinB 3
 #define do_motorDirection 4
@@ -18,7 +17,8 @@ int value = 0;
 int encoderValueTemp = 0;
 long MAX_TIMEOUT = 2000;
 bool eeprom_states[2];
-
+bool reset_eeprom;
+bool eeprom_init_state_ok = true;
 
 // TODO: Expand content of the send byte array
 // CONTENT
@@ -51,5 +51,5 @@ int counter = 1;
 const int MULTIPLICATION_FACTOR = 10;
 
 bool pid_controller_enabled = true;
-bool writeToEeprom_inUse = false;
 byte REFERENCE_POSITION[2];
+bool lockAction = false;

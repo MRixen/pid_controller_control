@@ -1,3 +1,4 @@
+
 void mcp2515_init_tx_buffer0(byte identifierLow, byte identifierHigh, byte messageSize) {
 
 	// Set the message identifier to 10000000000 and extended identifier bit to 0
