@@ -42,20 +42,24 @@ void setup()
 	mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
 
 	// Read last encoder value from eeprom
-	if (EEPROM.read(eeprom_act_pos_validate) == 1) {
-		ist_motorAngle.bytes[0] = EEPROM.read(eeprom_act_pos_1);
-		ist_motorAngle.bytes[1] = EEPROM.read(eeprom_act_pos_2);
+	if (EEPROM.read(eeprom_addr_act_pos_validate) == 1) {
+		eeprom_states[eeprom_state_last_pos] = true;
+		ist_motorAngle.bytes[0] = EEPROM.read(eeprom_addr_act_pos_1);
+		ist_motorAngle.bytes[1] = EEPROM.read(eeprom_addr_act_pos_2);
 		encoderValue = ist_motorAngle.data;
 	}
 	else {
+		eeprom_states[eeprom_state_last_pos] = false;
+
 		// TODO
 		// SHow error blink code with red state led 
 	}
 
 	// Read ref pos value from eeprom
-	if (EEPROM.read(eeprom_ref_pos_validate) == 1) {
-		ref_pos.bytes[0] = EEPROM.read(eeprom_ref_pos_1);
-		ref_pos.bytes[1] = EEPROM.read(eeprom_ref_pos_2);
+	if (EEPROM.read(eeprom_addr_ref_pos_validate) == 1) {
+		eeprom_states[eeprom_state_ref_pos] = true;
+		ref_pos.bytes[0] = EEPROM.read(eeprom_addr_ref_pos_1);
+		ref_pos.bytes[1] = EEPROM.read(eeprom_addr_ref_pos_2);
 		// TODO:
 		// Convert motorId to array of ids to use motor id 0 and 1
 		REFERENCE_POSITION[motorId] = ref_pos.data;
@@ -63,6 +67,7 @@ void setup()
 	else {
 		// TODO
 		// SHow error blink code with red state led 
+		eeprom_states[eeprom_state_ref_pos] = false;
 	}
 
 	// Attach interrupt for encoder
@@ -93,123 +98,125 @@ void setup()
 
 void loop()
 {
-	rxStateIst = 0x00;
-	pwmValueTemp = 0;
-	motorIsActive = true;
-
-	// Check if message is received in buffer 0 or 1
-	if ((digitalRead(di_mcp2515_int_rec) == 1))
+	// Do some work if eeprom values were read successfully
+	if (eeprom_states[eeprom_state_ref_pos] & eeprom_states[eeprom_state_last_pos])
 	{
-		// Get current rx buffer
-		rxStateIst = mcp2515_execute_read_state_command(do_csMcp2515);
+		rxStateIst = 0x00;
+		pwmValueTemp = 0;
+		motorIsActive = true;
 
-		// Read incoming data package
-		receiveData(rxStateIst, rxStateSoll);
+		// Check if message is received in buffer 0 or 1
+		if ((digitalRead(di_mcp2515_int_rec) == 1))
+		{
+			// Get current rx buffer
+			rxStateIst = mcp2515_execute_read_state_command(do_csMcp2515);
 
-		// Wait after receive command
-		delay((SAMPLE_TIME / 2) * 1000);
-	}
+			// Read incoming data package
+			receiveData(rxStateIst, rxStateSoll);
 
-	// Re initialize outgoing data array
-	for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
-
-	// Check incoming action and set outgoing package
-	if ((incoming_data[in_action] == action_saveToEeprom) | (incoming_data[in_action] == action_disablePidController) | (incoming_data[in_action] == action_enablePidController) | (incoming_data[in_action] == action_newPosition))
-	{
-		outgoing_data[out_action] = incoming_data[in_action];
-		outgoing_data[out_actionState] = state_pending;
-		outgoing_data[out_motorId] = incoming_data[in_motorId];
-	}
-
-	// Send package back to server
-	for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(outgoing_data[i], i, BYTES_TO_SEND);
-	mcp2515_execute_rts_command(0);
-
-	// Wait after send command
-	delay((SAMPLE_TIME / 2) * 1000);
-
-	// Work on action <saveToEeprom>
-	if (incoming_data[in_action] == action_saveToEeprom)
-	{
-		// Write actual motor position to eeprom (byte 0 and 1)
-		EEPROM.update(eeprom_ref_pos_1, lowByte(encoderValue));
-		EEPROM.update(eeprom_ref_pos_2, highByte(encoderValue));
-
-		// Validate writing and reset state if position is written to eeprom
-		if ((EEPROM.read(eeprom_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_ref_pos_2) == highByte(encoderValue))) outgoing_data[out_actionState] = state_init;
-	}
-
-	// Work on action <disablePidController>
-	if (incoming_data[in_action] == action_disablePidController)
-	{
-		pid_controller_enabled = false;
-		outgoing_data[out_actionState] = state_init;
-	}
-
-	// Work on action <enablePidController>
-	if (incoming_data[in_action] == action_enablePidController)
-	{
-		pid_controller_enabled = true;
-		outgoing_data[out_actionState] = state_init;
-	}
-
-	// Work on action <newPosition>
-	if (incoming_data[in_action] == action_newPosition)
-	{
-		// Convert byte to short 
-		soll_motorAngle.bytes[0] = incoming_data[in_angle_1];
-		soll_motorAngle.bytes[1] = incoming_data[in_angle_2];
-		soll_motor_angle = soll_motorAngle.data;
-
-		// Reset state if position is reached
-		if (pid_error == 0) outgoing_data[out_actionState] = state_init;
-	}
-
-	// Controll motor with pid
-	if (pid_controller_enabled)
-	{
-		// Convert encoder value to degree
-		current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
-
-		// Calculate error term (soll - ist)
-		pid_error = current_motor_angle - soll_motor_angle;
-		if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
-
-		// Calculate output for motor
-		double pid_control_value = pidController(pid_error);
-
-		// Configure direction value for motor
-		// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
-		if (pid_control_value < 0) {
-			digitalWrite(do_motorDirection, HIGH);
-			pid_control_value = pid_control_value*(-1);
+			// Wait after receive command
+			delay((SAMPLE_TIME / 2) * 1000);
 		}
-		else digitalWrite(do_motorDirection, LOW);
 
-		analogWrite(do_pwm, (int)pid_control_value);
+		// Re initialize outgoing data array
+		for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
+
+		// Check incoming action and set outgoing package
+		if ((incoming_data[in_action] == action_saveToEeprom) | (incoming_data[in_action] == action_disablePidController) | (incoming_data[in_action] == action_enablePidController) | (incoming_data[in_action] == action_newPosition))
+		{
+			outgoing_data[out_action] = incoming_data[in_action];
+			outgoing_data[out_actionState] = state_pending;
+			outgoing_data[out_motorId] = incoming_data[in_motorId];
+		}
+
+		// Send package back to server
+		for (size_t i = 0; i < BYTES_TO_SEND; i++) mcp2515_load_tx_buffer0(outgoing_data[i], i, BYTES_TO_SEND);
+		mcp2515_execute_rts_command(0);
+
+		// Wait after send command
+		delay((SAMPLE_TIME / 2) * 1000);
+
+		// Work on action <saveToEeprom>
+		if (incoming_data[in_action] == action_saveToEeprom)
+		{
+			// Write actual motor position to eeprom (byte 0 and 1)
+			EEPROM.update(eeprom_addr_ref_pos_1, lowByte(encoderValue));
+			EEPROM.update(eeprom_addr_ref_pos_2, highByte(encoderValue));
+
+			// Validate writing and reset state if position is written to eeprom
+			if ((EEPROM.read(eeprom_addr_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_ref_pos_2) == highByte(encoderValue))) outgoing_data[out_actionState] = state_init;
+		}
+
+		// Work on action <disablePidController>
+		if (incoming_data[in_action] == action_disablePidController)
+		{
+			pid_controller_enabled = false;
+			outgoing_data[out_actionState] = state_init;
+		}
+
+		// Work on action <enablePidController>
+		if (incoming_data[in_action] == action_enablePidController)
+		{
+			pid_controller_enabled = true;
+			outgoing_data[out_actionState] = state_init;
+		}
+
+		// Work on action <newPosition>
+		if (incoming_data[in_action] == action_newPosition)
+		{
+			// Convert byte to short 
+			soll_motorAngle.bytes[0] = incoming_data[in_angle_1];
+			soll_motorAngle.bytes[1] = incoming_data[in_angle_2];
+			soll_motor_angle = soll_motorAngle.data;
+
+			// Reset state if position is reached
+			if (pid_error == 0) outgoing_data[out_actionState] = state_init;
+		}
+
+		// Controll motor with pid
+		if (pid_controller_enabled)
+		{
+			// Convert encoder value to degree
+			current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
+
+			// Calculate error term (soll - ist)
+			pid_error = current_motor_angle - soll_motor_angle;
+			if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
+
+			// Calculate output for motor
+			double pid_control_value = pidController(pid_error);
+
+			// Configure direction value for motor
+			// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
+			if (pid_control_value < 0) {
+				digitalWrite(do_motorDirection, HIGH);
+				pid_control_value = pid_control_value*(-1);
+			}
+			else digitalWrite(do_motorDirection, LOW);
+
+			analogWrite(do_pwm, (int)pid_control_value);
+		}
+
+		// Store actual encoder value to eeprom when raspberry pi is off
+		// Arduino gets the rest of power from a condensator
+		if (!digitalRead(di_powerOn) & !writeToEeprom_inUse)
+		{
+			// Write actual motor position to eeprom (byte 2 and 3)
+			EEPROM.update(eeprom_addr_act_pos_1, lowByte(encoderValue));
+			EEPROM.update(eeprom_addr_act_pos_2, highByte(encoderValue));
+
+			// Validate writing 
+			// Store ok byte to eeprom (read this at startup to validate)
+			if ((EEPROM.read(eeprom_addr_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_act_pos_2) == highByte(encoderValue))) EEPROM.write(eeprom_addr_act_pos_validate, 1);
+			else EEPROM.write(eeprom_addr_act_pos_validate, 0);
+		}
+
+		//Send data to mcp
+		sendData(BYTES_TO_SEND, sendBuffer);
+
 	}
-
-	// Store actual encoder value to eeprom when raspberry pi is off
-	// Arduino gets the rest of power from a condensator
-	if (!digitalRead(di_powerOn) & !writeToEeprom_inUse)
-	{
-		// Write actual motor position to eeprom (byte 2 and 3)
-		EEPROM.update(eeprom_act_pos_1, lowByte(encoderValue));
-		EEPROM.update(eeprom_act_pos_2, highByte(encoderValue));
-
-		// Validate writing 
-		// Store ok byte to eeprom (read this at startup to validate)
-		if ((EEPROM.read(eeprom_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_act_pos_2) == highByte(encoderValue))) EEPROM.write(eeprom_act_pos_validate, 1);
-		else EEPROM.write(eeprom_act_pos_validate, 0);
-	}
-
-	//Send data to mcp
-	sendData(BYTES_TO_SEND, sendBuffer);
-
 	delay((SAMPLE_TIME / 2) * 1000);
 }
-
-
 
 bool receiveData(byte rxStateIst, byte rxStateSoll)
 {

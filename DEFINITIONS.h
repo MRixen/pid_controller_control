@@ -17,6 +17,7 @@ long timeout_start = 0;
 int value = 0;
 int encoderValueTemp = 0;
 long MAX_TIMEOUT = 2000;
+bool eeprom_states[2];
 
 
 // TODO: Expand content of the send byte array
