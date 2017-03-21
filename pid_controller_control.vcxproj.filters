@@ -21,5 +21,25 @@
     <ClInclude Include="__vm\.pid_controller_control.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MCP2515.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PID.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DATAPACKAGE.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DEFINITIONS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="MCP2515.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PID.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
