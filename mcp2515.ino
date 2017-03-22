@@ -222,10 +222,10 @@ void mcp2515_load_tx_buffer0(byte messageData, int byteNumber, int messageSize) 
 	mcp2515_execute_write_command(REGISTER_TXB0Dx[byteNumber], messageData, do_csMcp2515);
 
 	// DEBUG
-	Serial.print("outgoing_data ");
-	Serial.print(byteNumber);
-	Serial.print(": ");
-	Serial.println(messageData);
+	//Serial.print("outgoing_data ");
+	//Serial.print(byteNumber);
+	//Serial.print(": ");
+	//Serial.println(messageData);
 
 }
 
