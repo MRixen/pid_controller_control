@@ -121,7 +121,6 @@ void loop()
 	rxStateIst = 0x00;
 	pwmValueTemp = 0;
 	motorIsActive = true;
-	for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
 
 	// Check if message is received in buffer 0 or 1
 	if ((digitalRead(di_mcp2515_int_rec) == 0))
@@ -136,10 +135,13 @@ void loop()
 		delay((SAMPLE_TIME / 2) * 1000);
 	}
 
-	if ((incoming_data[in_action] == action_nothingToDo)) lockAction = false;
+	if ((incoming_data[in_action] == action_nothingToDo)) {
+		lockAction = false;
+		for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
+	}
 
 	// Check incoming action and set outgoing package
-	if ((!lockAction) & (incoming_data[in_action] == action_saveToEeprom) | (incoming_data[in_action] == action_disablePidController) | (incoming_data[in_action] == action_enablePidController) | (incoming_data[in_action] == action_newPosition))
+	if ((!lockAction) & ((incoming_data[in_action] == action_saveToEeprom) | (incoming_data[in_action] == action_disablePidController) | (incoming_data[in_action] == action_enablePidController) | (incoming_data[in_action] == action_newPosition)))
 	{
 		outgoing_data[out_action] = incoming_data[in_action];
 		outgoing_data[out_actionState] = state_pending;
@@ -161,7 +163,11 @@ void loop()
 		EEPROM.update(eeprom_addr_ref_pos_2, highByte(encoderValue));
 
 		// Validate writing and reset state if position is written to eeprom
-		if ((EEPROM.read(eeprom_addr_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_ref_pos_2) == highByte(encoderValue))) outgoing_data[out_actionState] = state_init;
+		if ((EEPROM.read(eeprom_addr_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_ref_pos_2) == highByte(encoderValue))) outgoing_data[out_actionState] = state_complete;
+
+		soll_motorAngle.bytes[0] = EEPROM.read(eeprom_addr_ref_pos_1);
+		soll_motorAngle.bytes[1] = EEPROM.read(eeprom_addr_ref_pos_2);
+		Serial.println(soll_motorAngle.data);
 	}
 
 	// Work on action <disablePidController>
@@ -169,7 +175,7 @@ void loop()
 	{
 		lockAction = true;
 		pid_controller_enabled = false;
-		outgoing_data[out_actionState] = state_init;
+		outgoing_data[out_actionState] = state_complete;
 	}
 
 	// Work on action <enablePidController>
@@ -177,7 +183,7 @@ void loop()
 	{
 		lockAction = true;
 		pid_controller_enabled = true;
-		outgoing_data[out_actionState] = state_init;
+		outgoing_data[out_actionState] = state_complete;
 	}
 
 	// Work on action <newPosition>
@@ -185,12 +191,12 @@ void loop()
 	{
 		lockAction = true;
 		// Convert byte to short 
-		soll_motorAngle.bytes[0] = incoming_data[in_angle_1];
-		soll_motorAngle.bytes[1] = incoming_data[in_angle_2];
+		soll_motorAngle.bytes[0] = incoming_data[in_angle_2];
+		soll_motorAngle.bytes[1] = incoming_data[in_angle_1];
 		soll_motor_angle = soll_motorAngle.data;
 
-		// Reset state if position is reached
-		if (pid_error == 0) outgoing_data[out_actionState] = state_init;
+		if (incoming_data[in_motorDir] == 0) soll_motor_angle = soll_motor_angle*(-1);
+		else soll_motor_angle = soll_motor_angle;
 	}
 
 	// Controll motor with pid
@@ -215,6 +221,9 @@ void loop()
 		else digitalWrite(do_motorDirection, LOW);
 
 		analogWrite(do_pwm, (int)pid_control_value);
+
+		// Reset state if position is reached
+		if ((pid_error == 0) & (incoming_data[in_action] == action_newPosition)) outgoing_data[out_actionState] = state_complete;
 	}
 
 	// Store actual encoder value to eeprom when raspberry pi is off
@@ -230,6 +239,9 @@ void loop()
 	//	if ((EEPROM.read(eeprom_addr_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_act_pos_2) == highByte(encoderValue))) EEPROM.update(eeprom_addr_error, 0);
 	//	else EEPROM.update(eeprom_addr_error, 1);
 	//}
+	//Serial.println(outgoing_data[out_actionState]);
+	//Serial.println(encoderValue);
+	//Serial.println(soll_motor_angle);
 }
 
 bool receiveData(byte rxStateIst, byte rxStateSoll)
@@ -240,7 +252,15 @@ bool receiveData(byte rxStateIst, byte rxStateSoll)
 }
 
 void sendData(byte maxByte, byte buffer[]) {
-	for (size_t i = 0; i < maxByte; i++) mcp2515_load_tx_buffer0(buffer[i], i, maxByte);
+	for (size_t i = 0; i < maxByte; i++) {
+		mcp2515_load_tx_buffer0(buffer[i], i, maxByte);
+		//Serial.print("outgoing ");
+		//Serial.print(i);
+		//Serial.print(": ");
+		//Serial.println(buffer[i]);
+	}
+	//Serial.print("state: ");
+	//Serial.println(buffer[2]);
 	mcp2515_execute_rts_command(0);
 }
 

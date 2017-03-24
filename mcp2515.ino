@@ -343,10 +343,10 @@ bool readControlValue(byte bufferId, int cs_pin)
 		incoming_data[i] = SPI.transfer(0x00);
 
 		// DEBUG
-		Serial.print("incoming_data ");
-		Serial.print(i);
-		Serial.print(": ");
-		Serial.println(incoming_data[i]);
+		//Serial.print("incoming ");
+		//Serial.print(i);
+		//Serial.print(": ");
+		//Serial.println(incoming_data[i]);
 	}
 	setCsPin(cs_pin, HIGH);
 	//delay(SLOW_DOWN_CODE);
