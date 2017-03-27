@@ -47,7 +47,7 @@ double N = 4.6424770619278;
 // -----------------------------------------
 // -----------------------------------------
 const double ENCODER_TO_DEGREE = 1;
-double soll_motor_angle = 0; // deg
+double soll_motor_angle_temp = 0; // deg
 double pid_error;
 double current_motor_angle = 0;
 double p_term = 0;
@@ -63,4 +63,6 @@ double const MIN_PID_ERROR = 0.15;
 
 
 long encoderValue = 0;
-int pwm_motorDirection, taskNumber, motorId, extraCondition;
+int pwm_motorDirection, taskNumber, extraCondition;
+int const MOTOR_ID_1 = 1;
+int const MOTOR_ID_2 = 2;

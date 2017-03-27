@@ -47,6 +47,14 @@ enum EepromAddresses
 	eeprom_addr_error
 };
 
+enum ErrorCodes
+{
+	error_ok,
+	error_eeprom_reset,
+	error_eeprom_ref_pos,
+	error_eeprom_act_pos
+};
+
 enum RobotActions
 {
 	action_nothingToDo,
