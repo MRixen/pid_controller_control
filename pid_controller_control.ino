@@ -15,7 +15,6 @@ void setup()
 
 	// Configure program data
 	firstStart = true;
-	extraCondition = false;
 
 	// USER CONFIGURATION
 	debugMode = true;
@@ -31,7 +30,8 @@ void setup()
 	pinMode(LED_BUILTIN, OUTPUT);
 	pinMode(di_powerOn, INPUT);
 
-	di_powerOn_state = digitalRead(di_powerOn);
+	// Read input signal for storing actual encoder position
+	di_powerOn_state_old = digitalRead(di_powerOn);
 
 	// Reset eeprom if user select it
 	bool eeprom_init_state_ok = true;
@@ -45,6 +45,9 @@ void setup()
 
 		// Show write state as blink code
 		while (!eeprom_init_state_ok) blinkErrorCode(error_eeprom_reset, true, false);
+
+		// Stop program execution
+		while (true) delay(500);
 	}
 
 	// Check error on eeprom writing process (ref or act position)
@@ -232,30 +235,51 @@ void loop()
 		else digitalWrite(do_motorDirection, LOW);
 
 		// Limit the motor angle to prevent mechanical damage
-		if ((current_motor_angle <= MAX_MOTOR_ANGLE) & (current_motor_angle >= MIN_MOTOR_ANGLE)) analogWrite(do_pwm, (int)pid_control_value);
-		else analogWrite(do_pwm, 0);
+		if ((soll_motorAngle.data <= MAX_MOTOR_ANGLE) & (soll_motorAngle.data >= MIN_MOTOR_ANGLE)) {
+			analogWrite(do_pwm, (int)pid_control_value);
+			posOutReached = false;
+		}
+		else {
+			analogWrite(do_pwm, 0);
+			posOutReached = true;
+		}
 
-		// Reset state if position is reached
-		if ((pid_error == 0) & (incoming_data[in_action] == action_newPosition)) outgoing_data[out_actionState] = state_complete;
+		// Reset state if position is reached or not reached because of mechanical limit
+		// TODO: Send different state (state eerror stop mechanic...)
+		if (((pid_error == 0) | (posOutReached)) & (incoming_data[in_action] == action_newPosition)) {
+			outgoing_data[out_actionState] = state_complete;
+			posOutReached = false;
+		}
+		Serial.println(soll_motor_angle_temp);
+
 	}
+
 
 	// Store actual encoder value to eeprom when raspberry pi is off or if someone reset the input signal
-	// Arduino gets the rest of power from a condensator
-	// Rising edge
+	// Arduino maybe gets the rest of power from a condensator
+	// Falling edge of di_powerOn
 	int di_powerOn_state = digitalRead(di_powerOn);
-	if (!di_powerOn_state_old & di_powerOn_state) {
-		di_powerOn_state_old = di_powerOn_state;
-		// Write actual motor position to eeprom
-		EEPROM.update(eeprom_addr_act_pos_1, lowByte(encoderValue));
-		EEPROM.update(eeprom_addr_act_pos_2, highByte(encoderValue));
+	if (di_powerOn_state_old & !di_powerOn_state) {
+		//di_powerOn_state_old = di_powerOn_state;
+		//// Write actual motor position to eeprom
+		//EEPROM.update(eeprom_addr_act_pos_1, lowByte(encoderValue));
+		//EEPROM.update(eeprom_addr_act_pos_2, highByte(encoderValue));
 
-		// Validate writing 
-		// Store ok byte to eeprom (and read this at startup to validate)
-		if ((EEPROM.read(eeprom_addr_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_act_pos_2) == highByte(encoderValue))) EEPROM.update(eeprom_addr_error, error_ok);
-		else EEPROM.update(eeprom_addr_error, error_eeprom_act_pos);
+		//ist_motorAngle.bytes[0] = EEPROM.read(eeprom_addr_act_pos_1);
+		//ist_motorAngle.bytes[1] = EEPROM.read(eeprom_addr_act_pos_2);
+		//encoderValue = ist_motorAngle.data;
+		//// TODO
+		//// Validate act pos value (maybe flip the bytes)
+		//Serial.print("encoderValue di_powerOn: ");
+		//Serial.println(encoderValue);
+
+		//// Validate writing 
+		//// Store ok byte to eeprom (and read this at startup to validate)
+		//if ((EEPROM.read(eeprom_addr_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_act_pos_2) == highByte(encoderValue))) EEPROM.update(eeprom_addr_error, error_ok);
+		//else EEPROM.update(eeprom_addr_error, error_eeprom_act_pos);
 
 	}
-	else if (!di_powerOn_state) di_powerOn_state_old = false;
+	else if (di_powerOn_state) di_powerOn_state_old = true;
 
 	//Serial.println(outgoing_data[out_actionState]);
 	//Serial.println(encoderValue);
@@ -357,7 +381,7 @@ void blinkErrorCode(int error, int waitBefore, int waitAfter) {
 	}
 
 	// Reset led state and wait some time
-	if(waitAfter) setLedState(1000, 0, 0, LED_BUILTIN, LOW);
+	if (waitAfter) setLedState(1000, 0, 0, LED_BUILTIN, LOW);
 }
 
 void setLedState(int blinkLength, int pauseBefore, int pauseAfter, int led, int state) {

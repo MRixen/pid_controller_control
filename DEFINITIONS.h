@@ -55,3 +55,4 @@ bool lockAction = false;
 const int MAX_MOTOR_ANGLE = 90; 
 const int MIN_MOTOR_ANGLE = -90;
 int di_powerOn_state_old;
+bool posOutReached = false;

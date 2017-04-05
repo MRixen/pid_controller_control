@@ -63,6 +63,6 @@ double const MIN_PID_ERROR = 0.15;
 
 
 long encoderValue = 0;
-int pwm_motorDirection, taskNumber, extraCondition;
+int pwm_motorDirection, taskNumber;
 int const MOTOR_ID_1 = 1;
 int const MOTOR_ID_2 = 2;
