@@ -18,6 +18,7 @@ int encoderValueTemp = 0;
 long MAX_TIMEOUT = 2000;
 bool eeprom_states[2];
 bool reset_eeprom;
+const int MOTOR_ID = 0;
 
 // TODO: Expand content of the send byte array
 // CONTENT
@@ -50,7 +51,6 @@ int counter = 1;
 const int MULTIPLICATION_FACTOR = 10;
 
 bool pid_controller_enabled = true;
-byte REF_POS[2];
 bool lockAction = false;
 const int MAX_MOTOR_ANGLE = 90; 
 const int MIN_MOTOR_ANGLE = -90;

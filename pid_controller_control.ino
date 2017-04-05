@@ -6,8 +6,10 @@
 #include "DATAPACKAGE.h"
 
 // ------------------------------------
-// Controlling motors with id 0 and 1
+// Controlling motors with id 0
 // ------------------------------------
+
+// TODO: Configure identifier for can bus to receive data for motor 0 only
 void setup()
 {
 	// Configure serial interface
@@ -73,19 +75,22 @@ void setup()
 	ist_motorAngle.bytes[0] = EEPROM.read(eeprom_addr_act_pos_1);
 	ist_motorAngle.bytes[1] = EEPROM.read(eeprom_addr_act_pos_2);
 	encoderValue = ist_motorAngle.data;
-	// TODO
-	// Validate act pos value (maybe flip the bytes)
-	Serial.print("encoderValue last: ");
-	Serial.println(encoderValue);
+
+	// TODO: Validate act pos value (maybe flip the bytes)
+	if (debugMode) {
+		Serial.print("encoderValue last: ");
+		Serial.println(encoderValue);
+	}
 
 	// Read ref pos value from eeprom
 	ref_pos.bytes[0] = EEPROM.read(eeprom_addr_ref_pos_1);
 	ref_pos.bytes[1] = EEPROM.read(eeprom_addr_ref_pos_2);
-	REF_POS[MOTOR_ID_1] = ref_pos.data;
-	// TODO
-	// Validate ref pos value (maybe flip the bytes)
-	Serial.print("REF_POS[1] last: ");
-	Serial.println(REF_POS[MOTOR_ID_1]);
+
+	// TODO: Validate ref pos value (maybe flip the bytes)
+	if (debugMode) {
+		Serial.print("ref_pos.data last: ");
+		Serial.println(ref_pos.data);
+	}
 
 	// Init
 	soll_motorAngle.data = 0;
@@ -167,13 +172,17 @@ void loop()
 
 		// Validate writing and reset state if position is written to eeprom
 		if ((EEPROM.read(eeprom_addr_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_ref_pos_2) == highByte(encoderValue))) {
+
+			// Save ref pos value to local variable
 			ref_pos.bytes[0] = lowByte(encoderValue);
 			ref_pos.bytes[1] = highByte(encoderValue);
-			REF_POS[MOTOR_ID_1] = ref_pos.data;
-			// TODO
-			// Validate ref pos value (maybe flip the bytes)
-			Serial.print("REF_POS[1]: ");
-			Serial.println(REF_POS[MOTOR_ID_1]);
+
+			// TODO: Validate ref pos value (maybe flip the bytes)
+			if (debugMode)
+			{
+				Serial.print("ref_pos.data new: ");
+				Serial.println(ref_pos.data);
+			}
 
 			outgoing_data[out_actionState] = state_complete;
 			EEPROM.update(eeprom_addr_error, error_ok);
@@ -217,7 +226,7 @@ void loop()
 		current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
 
 		// Add ref pos value to soll motor angle 
-		soll_motor_angle_temp = soll_motorAngle.data + REF_POS[MOTOR_ID_1];
+		soll_motor_angle_temp = soll_motorAngle.data + ref_pos.data;
 
 		// Calculate error term (soll - ist)
 		pid_error = current_motor_angle - soll_motor_angle_temp;
@@ -250,8 +259,6 @@ void loop()
 			outgoing_data[out_actionState] = state_complete;
 			posOutReached = false;
 		}
-		Serial.println(soll_motor_angle_temp);
-
 	}
 
 
