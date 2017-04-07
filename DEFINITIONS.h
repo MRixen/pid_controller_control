@@ -2,7 +2,8 @@
 #define di_encoderPinB 3
 #define do_motorDirection 4
 #define di_powerOn 5
-#define do_pwm 9
+//#define do_pwm 9 // For Arduino Nano
+#define do_pwm 6 // For Arduino Uno (Failure by pin 9)
 #define do_csMcp2515 8
 #define do_csArduino 10
 #define di_mcp2515_int_rec 7
@@ -18,7 +19,6 @@ int encoderValueTemp = 0;
 long MAX_TIMEOUT = 2000;
 bool eeprom_states[2];
 bool reset_eeprom;
-const int MOTOR_ID = 0;
 
 // TODO: Expand content of the send byte array
 // CONTENT
@@ -56,3 +56,10 @@ const int MAX_MOTOR_ANGLE = 90;
 const int MIN_MOTOR_ANGLE = -90;
 int di_powerOn_state_old;
 bool posOutReached = false;
+
+union motor_id
+{
+	short lowByte;
+	short highByte;
+	byte bytes[2];
+};
