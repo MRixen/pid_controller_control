@@ -160,6 +160,8 @@ void loop()
 		if ((incoming_data[in_action] == action_nothingToDo)) {
 			lockAction = false;
 			for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
+			// Send motor id every time as alive flag
+			outgoing_data[1] = 0;
 		}
 
 		// Check incoming action and set outgoing package
