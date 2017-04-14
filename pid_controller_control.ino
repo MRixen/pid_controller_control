@@ -6,9 +6,9 @@
 #include "DATAPACKAGE.h"
 
 // ------------------------------------
-// Controlling motors with id 2
-// ------------------------------------
+// Controlling motors with id 
 int motorId = 2; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
+// ------------------------------------
 
 // TODO: Configure identifier for can bus to receive data for motor 0 only
 void setup()
@@ -152,7 +152,7 @@ void loop()
 		delay((SAMPLE_TIME / 2) * 1000);
 	}
 
-	Serial.println(incoming_data[in_motorId]);
+	//Serial.println(incoming_data[in_motorId]);
 
 	// Do something when the motor id is right
 	if (incoming_data[in_motorId] == motorId) {
@@ -161,7 +161,7 @@ void loop()
 			lockAction = false;
 			for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
 			// Send motor id every time as alive flag
-			outgoing_data[1] = 0;
+			outgoing_data[out_motorId] = motorId;
 		}
 
 		// Check incoming action and set outgoing package
@@ -170,7 +170,7 @@ void loop()
 			outgoing_data[out_action] = incoming_data[in_action];
 			outgoing_data[out_actionState] = state_pending;
 			outgoing_data[out_motorId] = incoming_data[in_motorId];
-			Serial.println("package");
+			//Serial.println("package");
 		}
 
 		// Send package back to client
@@ -279,29 +279,29 @@ void loop()
 				posOutReached = true;
 			}
 
-			//TEST
-			Serial.print("pid_control_value: ");
-			Serial.println(pid_control_value);
-			//TEST
+			////TEST
+			//Serial.print("pid_control_value: ");
+			//Serial.println(pid_control_value);
+			////TEST
 
-			//TEST
-			Serial.print("pid_error: ");
-			Serial.println(pid_error);
-			//TEST
+			////TEST
+			//Serial.print("pid_error: ");
+			//Serial.println(pid_error);
+			////TEST
 
-			//TEST
-			Serial.print("outgoing_data[out_actionState]: ");
-			Serial.println(outgoing_data[out_actionState]);
-			//TEST
+			////TEST
+			//Serial.print("outgoing_data[out_actionState]: ");
+			//Serial.println(outgoing_data[out_actionState]);
+			////TEST
 
-			//TEST
-			Serial.print("incoming_data[in_action]: ");
-			Serial.println(incoming_data[in_action]);
-			//TEST
+			////TEST
+			//Serial.print("incoming_data[in_action]: ");
+			//Serial.println(incoming_data[in_action]);
+			////TEST
 
-			//TEST
-			Serial.print("posOutReached: ");
-			Serial.println(posOutReached);
+			////TEST
+			//Serial.print("posOutReached: ");
+			//Serial.println(posOutReached);
 			//TEST
 
 			// Reset state if position is reached or not reached because of mechanical limit
@@ -310,14 +310,14 @@ void loop()
 				outgoing_data[out_actionState] = state_complete;
 				posOutReached = false;
 				//TEST
-				Serial.print("outgoing_data[out_actionState]: ");
-				Serial.println(outgoing_data[out_actionState]);
+				//Serial.print("outgoing_data[out_actionState]: ");
+				//Serial.println(outgoing_data[out_actionState]);
 				//TEST
 			}
 
 			//TEST
-			Serial.print("outgoing_data[out_actionState]_2: ");
-			Serial.println(outgoing_data[out_actionState]);
+			//Serial.print("outgoing_data[out_actionState]_2: ");
+			//Serial.println(outgoing_data[out_actionState]);
 			//TEST
 		}
 
