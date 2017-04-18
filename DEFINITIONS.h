@@ -3,10 +3,11 @@
 #define do_motorDirection 4
 #define di_powerOn 5
 //#define do_pwm 9 // For Arduino Nano
-#define do_pwm 6 // For Arduino Uno (Failure by pin 9)
+//#define do_pwm 6 // For Arduino Uno (Failure by pin 9)
 #define do_csMcp2515 8
 #define do_csArduino 10
 #define di_mcp2515_int_rec 7
+uint8_t do_pwm;
 
 short pwmValueTemp = 0;
 bool motorIsActive = false;

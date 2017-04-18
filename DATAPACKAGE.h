@@ -59,9 +59,10 @@ enum RobotActions
 {
 	action_nothingToDo,
 	action_newPosition,
-	action_saveToEeprom,
+	action_saveRefPosToEeprom,
 	action_disablePidController,
-	action_enablePidController
+	action_enablePidController,
+	action_saveActPosToEeprom
 };
 
 enum Outgoing_Package_Content
