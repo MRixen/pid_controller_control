@@ -7,7 +7,7 @@
 
 // ------------------------------------
 // Controlling motors with id 
-int motorId = 4; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
+int motorId = 2; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
 // ------------------------------------
 
 // TODO: Configure identifier for can bus to receive data for motor 0 only
