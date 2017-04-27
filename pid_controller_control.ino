@@ -7,7 +7,7 @@
 
 // ------------------------------------
 // Controlling motors with id 
-int motorId = 2; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
+int motorId = 3; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
 // ------------------------------------
 
 // TODO: Configure identifier for can bus to receive data for motor 0 only
@@ -18,8 +18,16 @@ void setup()
 	switch (motorId)
 	{
 	case 1:
-		do_pwm = 9; // For Arduino Nano
-		// ID for Motor 1 - Arduino Nano
+		do_pwm = 9;
+		REGISTER_TXB0SIDL_VALUE = 0x20;
+		REGISTER_TXB0SIDH_VALUE = 0x01;
+		REGISTER_TXB1SIDL_VALUE = 0x20;
+		REGISTER_TXB1SIDH_VALUE = 0x01;
+		REGISTER_TXB2SIDL_VALUE = 0x20;
+		REGISTER_TXB2SIDH_VALUE = 0x01;
+		break;
+	case 2:
+		do_pwm = 9;
 		REGISTER_TXB0SIDL_VALUE = 0x40;
 		REGISTER_TXB0SIDH_VALUE = 0x02;
 		REGISTER_TXB1SIDL_VALUE = 0x40;
@@ -27,15 +35,23 @@ void setup()
 		REGISTER_TXB2SIDL_VALUE = 0x40;
 		REGISTER_TXB2SIDH_VALUE = 0x02;
 		break;
-	case 2:
-		do_pwm = 6; // For Arduino Uno (Failure by pin 9)
-		// ID for Motor 2 - Arduino Uno
+	case 3:
+		do_pwm = 9;
 		REGISTER_TXB0SIDL_VALUE = 0x60;
 		REGISTER_TXB0SIDH_VALUE = 0x03;
 		REGISTER_TXB1SIDL_VALUE = 0x60;
 		REGISTER_TXB1SIDH_VALUE = 0x03;
 		REGISTER_TXB2SIDL_VALUE = 0x60;
 		REGISTER_TXB2SIDH_VALUE = 0x03;
+		break;
+	case 4:
+		do_pwm = 9;
+		REGISTER_TXB0SIDL_VALUE = 0x80;
+		REGISTER_TXB0SIDH_VALUE = 0x04;
+		REGISTER_TXB1SIDL_VALUE = 0x80;
+		REGISTER_TXB1SIDH_VALUE = 0x04;
+		REGISTER_TXB2SIDL_VALUE = 0x80;
+		REGISTER_TXB2SIDH_VALUE = 0x04;		
 		break;
 	default:
 		break;
@@ -50,7 +66,6 @@ void setup()
 
 	// USER CONFIGURATION
 	debugMode = true;
-	reset_eeprom = false; // Here you can reset the eeprom (set all values to zero). Neccessary for the first use, because the init values are 255
 
 	// Configure identifier for this motor
 	//int motorIdTemp = motorId + 256;
@@ -75,22 +90,21 @@ void setup()
 
 	// Reset eeprom if user select it
 	bool eeprom_init_state_ok = true;
-	if (reset_eeprom)
+
+	// Reset eeprom at first start
+	if (EEPROM.read(5) != 0) // At first start this all eeprom bytes are 255
 	{
 		// Write zeros
-		for (size_t i = 0; i < 5; i++) EEPROM.update(i, 0);
+		for (size_t i = 0; i < 6; i++) EEPROM.write(i, 0);  //EEPROM.update(i, 0);
 
 		// Check written data
-		for (size_t i = 0; i < 5; i++) if (EEPROM.read(i) != 0) eeprom_init_state_ok = false;
+		for (size_t i = 0; i < 6; i++) if (EEPROM.read(i) != 0) eeprom_init_state_ok = false;
 
 		// Show write state as blink code
 		while (!eeprom_init_state_ok) blinkErrorCode(error_eeprom_reset, true, false);
 
 		// Stop program execution
-		while (true) {
-			delay(500);
-			Serial.println("Ready reset eeprom.");
-		}
+		Serial.println("Ready reset eeprom.");
 	}
 
 	// Check error on eeprom writing process (ref or act position)
@@ -215,7 +229,7 @@ void loop()
 		// Work on action <saveToEeprom>
 		if ((!lockAction) & (incoming_data[in_action] == action_saveRefPosToEeprom))
 		{
-			lockAction = true;
+			//lockAction = true;
 			// Write actual motor position as ref pos to eeprom (byte 0 and 1)
 			EEPROM.update(eeprom_addr_ref_pos_1, lowByte(encoderValue));
 			EEPROM.update(eeprom_addr_ref_pos_2, highByte(encoderValue));
@@ -244,7 +258,7 @@ void loop()
 		// Work on action <disablePidController>
 		if ((!lockAction) & (incoming_data[in_action] == action_disablePidController))
 		{
-			lockAction = true;
+			//lockAction = true;
 			pid_controller_enabled = false;
 			outgoing_data[out_actionState] = state_complete;
 			Serial.println("disablePidController");
@@ -253,7 +267,7 @@ void loop()
 		// Work on action <enablePidController>
 		if ((!lockAction) & (incoming_data[in_action] == action_enablePidController))
 		{
-			lockAction = true;
+			//lockAction = true;
 			pid_controller_enabled = true;
 			outgoing_data[out_actionState] = state_complete;
 			Serial.println("enablePidController");
@@ -262,7 +276,7 @@ void loop()
 		// Work on action <newPosition>
 		if ((!lockAction) & (incoming_data[in_action] == action_newPosition))
 		{
-			lockAction = true;
+			//lockAction = true;
 			// Convert byte to short 
 			soll_motorAngle.bytes[0] = incoming_data[in_angle_2];
 			soll_motorAngle.bytes[1] = incoming_data[in_angle_1];
@@ -270,15 +284,15 @@ void loop()
 
 			if (incoming_data[in_motorDir] == 0) soll_motor_angle_temp = soll_motor_angle_temp*(-1);
 			else soll_motor_angle_temp = soll_motor_angle_temp;
-			Serial.println("newPosition");
+			//Serial.println("newPosition");
 			outgoing_data[out_actionState] = state_complete;
 
 
-			//Serial.print("incoming_data[in_action]: ");
-			//Serial.println(incoming_data[in_action]);
+			Serial.print("incoming_data[in_action]: ");
+			Serial.println(incoming_data[in_action]);
 
-			//Serial.print("incoming_data[in_angle_2]: ");
-			//Serial.println(incoming_data[in_angle_2]);
+			Serial.print("incoming_data[in_angle_2]: ");
+			Serial.println(incoming_data[in_angle_2]);
 
 			//Serial.print("incoming_data[in_motorDir]: ");
 			//Serial.println(incoming_data[in_motorDir]);
