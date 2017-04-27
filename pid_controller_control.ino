@@ -7,7 +7,7 @@
 
 // ------------------------------------
 // Controlling motors with id 
-int motorId = 3; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
+int motorId = 4; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
 // ------------------------------------
 
 // TODO: Configure identifier for can bus to receive data for motor 0 only
@@ -288,14 +288,16 @@ void loop()
 			outgoing_data[out_actionState] = state_complete;
 
 
-			Serial.print("incoming_data[in_action]: ");
-			Serial.println(incoming_data[in_action]);
+			//Serial.println("--------");
 
-			Serial.print("incoming_data[in_angle_2]: ");
-			Serial.println(incoming_data[in_angle_2]);
+			//Serial.print("incoming_data[in_action]: ");
+			//Serial.println(incoming_data[in_action]);
 
-			//Serial.print("incoming_data[in_motorDir]: ");
-			//Serial.println(incoming_data[in_motorDir]);
+			//Serial.print("incoming_data[in_angle_2]: ");
+			//Serial.println(incoming_data[in_angle_2]);
+
+			//Serial.print("incoming_data[in_motorId]: ");
+			//Serial.println(incoming_data[in_motorId]);
 		}
 
 		//Serial.print("incoming_data[in_action]: ");
