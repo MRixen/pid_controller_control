@@ -51,6 +51,5 @@ extern "C" void __cxa_pure_virtual() {;}
 #undef PSTR
 #define PSTR(string_literal) ((const PROGMEM char *)(string_literal))")
 #include "pid_controller_control.ino"
-#include "mcp2515.ino"
 #include "pid.ino"
 #endif

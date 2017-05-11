@@ -38,16 +38,17 @@
 //double D = 0.343845666242764;
 //double N = 5.46914538556796;
 
-// TEST
-//double P = -10.6155510552541;
-//double I = -0.487958012814397;
-//double D = 0.312079469943773;
-//double N = 4.6424770619278;
-
-double P = -2.6155510552541;
+// PID MOTOR BIG
+double P = -10.6155510552541;
 double I = -0.487958012814397;
 double D = 0.312079469943773;
 double N = 4.6424770619278;
+
+// PID MOTOR SMALL
+//double P = -1.5769363355766;
+//double I = -1.80574105020461;
+//double D = 0.816663126382965;
+//double N = 4.351022616953;
 
 // -----------------------------------------
 // -----------------------------------------
@@ -64,7 +65,8 @@ double d_filter = 0;
 double const SAMPLE_TIME = 0.05; // s
 double const UPPER_SATURATION_LIMIT = 255;
 double const LOWER_SATURATION_LIMIT = -255;
-double const MIN_PID_ERROR = 0.15;
+double const MIN_PID_ERROR = 0.15; // Big motor
+//double const MIN_PID_ERROR = 3; // Small motor
 
 
 long encoderValue = 0;

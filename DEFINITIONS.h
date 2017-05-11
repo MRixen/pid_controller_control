@@ -1,16 +1,15 @@
 #define di_encoderPinA 2
 #define di_encoderPinB 3
-//#define do_motorDirection 4
-#define di_powerOn 5
-//#define do_pwm 9 // For Arduino Nano
-//#define do_pwm 6 // For Arduino Uno (Failure by pin 9)
-#define do_csMcp2515 8
-#define do_csArduino 10
-#define di_mcp2515_int_rec 7
+#define di_enableController 7
+#define di_motorDirection1 8
+#define di_motorDirection2 10
+#define ai_sollAngle A0
+
 #define do_motorDirection1 4
 #define do_motorDirection2 5
 #define do_motorStandby 6
-uint8_t do_pwm;
+#define do_motorAngle 7
+#define do_pwm 9
 
 short pwmValueTemp = 0;
 bool motorIsActive = false;
@@ -40,6 +39,14 @@ byte sendBuffer[8];
 
 // GLOBAL DATA
 bool stopAllOperations = false;
+union controlData
+{
+	short data;
+	byte bytes[2];
+};
+
+controlData soll_motorAngle, ist_motorAngle, ref_pos;
+
 bool debugMode;
 const int ADXL = 1;
 const int MCP2515 = 2;

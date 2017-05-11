@@ -1,86 +1,9 @@
-#include <EEPROM.h>
-#include <SPI.h>
+#include <Wire.h>
 #include "DEFINITIONS.h"
-#include "MCP2515.h"
 #include "PID.h"
-#include "DATAPACKAGE.h"
 
-// ------------------------------------
-// Controlling motors with id 
-int motorId = 6; // Motor id (its NOT possible to use the same idetifier for two devices in the bus
-// ------------------------------------
-
-// !!!! NOTE !!!!
-// Motor ID: 1-4 reserved for big motor
-// Motor ID: 5-6 reserved for small motor -> There are two pins for direction! AND standbyPin
-// 
-//
-// TODO: Configure identifier for can bus to receive data for motor 0 only
 void setup()
 {
-	// Chosing the correct motor id
-	// We need to different between the arduino uno and nano (different pins)
-	switch (motorId)
-	{
-	case 1:
-		do_pwm = 9;
-		REGISTER_TXB0SIDL_VALUE = 0x20;
-		REGISTER_TXB0SIDH_VALUE = 0x01;
-		REGISTER_TXB1SIDL_VALUE = 0x20;
-		REGISTER_TXB1SIDH_VALUE = 0x01;
-		REGISTER_TXB2SIDL_VALUE = 0x20;
-		REGISTER_TXB2SIDH_VALUE = 0x01;
-		break;
-	case 2:
-		do_pwm = 9;
-		REGISTER_TXB0SIDL_VALUE = 0x40;
-		REGISTER_TXB0SIDH_VALUE = 0x02;
-		REGISTER_TXB1SIDL_VALUE = 0x40;
-		REGISTER_TXB1SIDH_VALUE = 0x02;
-		REGISTER_TXB2SIDL_VALUE = 0x40;
-		REGISTER_TXB2SIDH_VALUE = 0x02;
-		break;
-	case 3:
-		do_pwm = 9;
-		REGISTER_TXB0SIDL_VALUE = 0x60;
-		REGISTER_TXB0SIDH_VALUE = 0x03;
-		REGISTER_TXB1SIDL_VALUE = 0x60;
-		REGISTER_TXB1SIDH_VALUE = 0x03;
-		REGISTER_TXB2SIDL_VALUE = 0x60;
-		REGISTER_TXB2SIDH_VALUE = 0x03;
-		break;
-	case 4:
-		do_pwm = 9;
-		REGISTER_TXB0SIDL_VALUE = 0x80;
-		REGISTER_TXB0SIDH_VALUE = 0x04;
-		REGISTER_TXB1SIDL_VALUE = 0x80;
-		REGISTER_TXB1SIDH_VALUE = 0x04;
-		REGISTER_TXB2SIDL_VALUE = 0x80;
-		REGISTER_TXB2SIDH_VALUE = 0x04;
-		break;
-	case 5:
-		do_pwm = 9;
-		REGISTER_TXB0SIDL_VALUE = 0x60;
-		REGISTER_TXB0SIDH_VALUE = 0x03;
-		REGISTER_TXB1SIDL_VALUE = 0x60;
-		REGISTER_TXB1SIDH_VALUE = 0x03;
-		REGISTER_TXB2SIDL_VALUE = 0x60;
-		REGISTER_TXB2SIDH_VALUE = 0x03;
-		break;
-	case 6:
-		do_pwm = 9;
-		REGISTER_TXB0SIDL_VALUE = 0x80;
-		REGISTER_TXB0SIDH_VALUE = 0x04;
-		REGISTER_TXB1SIDL_VALUE = 0x80;
-		REGISTER_TXB1SIDH_VALUE = 0x04;
-		REGISTER_TXB2SIDL_VALUE = 0x80;
-		REGISTER_TXB2SIDH_VALUE = 0x04;
-		break;
-	default:
-		break;
-	}
-
-
 	// Configure serial interface
 	Serial.begin(9600);
 
@@ -90,92 +13,15 @@ void setup()
 	// USER CONFIGURATION
 	debugMode = true;
 
-	// Configure identifier for this motor
-	//int motorIdTemp = motorId + 256;
-	//for (int i = 0; i < 3; i++)
-	//{
-	//	REGISTER_TXBxSIDL_VALUE[i] = lowByte(motorIdTemp);
-	//	REGISTER_TXBxSIDH_VALUE[i] = highByte(motorIdTemp);
-	//}
-
 	// Define I/Os
-	pinMode(do_csMcp2515, OUTPUT); // Set as input to enable pull up resistor. It's neccessary because the ss line is defined at pin 10 + 9
-	pinMode(do_csArduino, OUTPUT); // Set as input to enable pull up resistor. It's neccessary because the ss line is defined at pin 10 + 9
 	pinMode(di_encoderPinA, INPUT);
 	pinMode(di_encoderPinB, INPUT);
-	pinMode(di_mcp2515_int_rec, INPUT);
-	pinMode(LED_BUILTIN, OUTPUT);
-	pinMode(di_powerOn, INPUT);
 	pinMode(do_motorDirection1, OUTPUT);
 	pinMode(do_motorDirection2, OUTPUT);
 	pinMode(do_motorStandby, OUTPUT);
 
+	// Init I/Os
 	digitalWrite(do_motorStandby, HIGH);
-
-	// Read input signal for storing actual encoder position
-	di_powerOn_state_old = digitalRead(di_powerOn);
-
-	// Reset eeprom if user select it
-	bool eeprom_init_state_ok = true;
-
-	// Reset eeprom at first start
-	if (EEPROM.read(5) != 0) // At first start this all eeprom bytes are 255
-	{
-		// Write zeros
-		for (size_t i = 0; i < 6; i++) EEPROM.write(i, 0);  //EEPROM.update(i, 0);
-
-		// Check written data
-		for (size_t i = 0; i < 6; i++) if (EEPROM.read(i) != 0) eeprom_init_state_ok = false;
-
-		// Show write state as blink code
-		while (!eeprom_init_state_ok) blinkErrorCode(error_eeprom_reset, true, false);
-
-		// Stop program execution
-		Serial.println("Ready reset eeprom.");
-	}
-
-	// Check error on eeprom writing process (ref or act position)
-	int value_eeprom = EEPROM.read(eeprom_addr_error);
-	if (value_eeprom != error_ok) {
-		// WHen there is an error stop the following operations and set the specific error code
-		while (true) blinkErrorCode(value_eeprom, true, false);
-	}
-
-	// Configure SPI
-	SPI.beginTransaction(SPISettings(5000000, MSBFIRST, SPI_MODE3));
-	SPI.begin();
-
-	// Configure MCP2515
-	initMcp2515();
-
-	// Set identifier, message length, etc.
-	//mcp2515_init_tx_buffer0(REGISTER_TXBxSIDL_VALUE[0], REGISTER_TXBxSIDH_VALUE[0], BYTES_TO_SEND);
-	//mcp2515_init_tx_buffer1(REGISTER_TXBxSIDL_VALUE[1], REGISTER_TXBxSIDH_VALUE[1], BYTES_TO_SEND);
-	//mcp2515_init_tx_buffer2(REGISTER_TXBxSIDL_VALUE[2], REGISTER_TXBxSIDH_VALUE[2], BYTES_TO_SEND);
-	mcp2515_init_tx_buffer0(REGISTER_TXB0SIDL_VALUE, REGISTER_TXB0SIDH_VALUE, BYTES_TO_SEND);
-	mcp2515_init_tx_buffer1(REGISTER_TXB1SIDL_VALUE, REGISTER_TXB1SIDH_VALUE, BYTES_TO_SEND);
-	mcp2515_init_tx_buffer2(REGISTER_TXB2SIDL_VALUE, REGISTER_TXB2SIDH_VALUE, BYTES_TO_SEND);
-
-	// Read last encoder value from eeprom
-	ist_motorAngle.bytes[0] = EEPROM.read(eeprom_addr_act_pos_1);
-	ist_motorAngle.bytes[1] = EEPROM.read(eeprom_addr_act_pos_2);
-	encoderValue = ist_motorAngle.data;
-
-	// TODO: Validate act pos value (maybe flip the bytes)
-	if (debugMode) {
-		Serial.print("encoderValue last: ");
-		Serial.println(encoderValue);
-	}
-
-	// Read ref pos value from eeprom
-	ref_pos.bytes[0] = EEPROM.read(eeprom_addr_ref_pos_1);
-	ref_pos.bytes[1] = EEPROM.read(eeprom_addr_ref_pos_2);
-
-	// TODO: Validate ref pos value (maybe flip the bytes)
-	if (debugMode) {
-		Serial.print("ref_pos.data last: ");
-		Serial.println(ref_pos.data);
-	}
 
 	// Init
 	soll_motorAngle.data = 0;
@@ -184,15 +30,14 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(di_encoderPinA), doEncoderA, CHANGE);
 	attachInterrupt(digitalPinToInterrupt(di_encoderPinB), doEncoderB, CHANGE);
 
+	// Configure I2C Bus
+	Wire.begin(); // join i2c bus (address optional for master)
+	Wire.begin(8);                // join i2c bus with address #8
+	Wire.onReceive(receiveEvent); // register event
+	Wire.onRequest(requestEvent); // register event
+
 	// Give time to set up
 	delay(100);
-
-	// Start timer to measure the program execution
-	errorTimerValue = millis();
-
-	// TODO:
-	// Turn green led on to show that everything was inititalized and maybe ok
-
 
 	// Move motor until 60deg to elmininate encoder offset (Only neccessary for premium gear motor (big motor)
 	//while (firstStart) {
@@ -206,212 +51,56 @@ void setup()
 	//}
 }
 
+void receiveEvent(int howMany) {
+	// TODO: Expand to 2 bytes
+	// Read 1 byte from bus
+	soll_motor_angle_temp = Wire.read();
+}
+
+void requestEvent() {
+	// Send 2 bytes on bus
+	Wire.write((int)current_motor_angle);
+}
+
 void loop()
 {
-	// TODO:
-	// Cancel pending operations
+	// Convert encoder value to degree and set it as output vor pid_can_bus_controller
+	current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
 
-	rxStateIst = 0x00;
-	pwmValueTemp = 0;
-	motorIsActive = true;
+	// Calculate error term (soll - ist)
+	pid_error = current_motor_angle - soll_motor_angle_temp;
+	if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
 
-	// Check if message is received in buffer 0 or 1
-	if ((digitalRead(di_mcp2515_int_rec) == 0))
+	// Calculate output for motor
+	double pid_control_value = pidController(pid_error);
+
+	// Set control value to zero when error term is zero
+	if (pid_error == 0) pid_control_value = 0;
+
+	// Configure direction value for motor
+	// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
+	if (pid_control_value < 0) {
+		//if (incoming_data[in_motorDir] == 0) {
+		digitalWrite(do_motorDirection1, LOW);
+		digitalWrite(do_motorDirection2, HIGH);
+		pid_control_value = pid_control_value*(-1);
+	}
+	else {
+		digitalWrite(do_motorDirection1, HIGH);
+		digitalWrite(do_motorDirection2, LOW);
+	}
+
+	// Check if controller is activated
+	if (digitalRead(di_enableController))
 	{
-		// Get current rx buffer
-		rxStateIst = mcp2515_execute_read_state_command(do_csMcp2515);
-
-		// Read incoming data package
-		receiveData(rxStateIst, rxStateSoll);
-
-		// Wait after receive command
-		delay((SAMPLE_TIME / 2) * 1000);
+		// Limit the motor angle to prevent mechanical damage
+		//if ((soll_motorAngle.data <= MAX_MOTOR_ANGLE) & (soll_motorAngle.data >= MIN_MOTOR_ANGLE)) {
+		analogWrite(do_pwm, (int)pid_control_value);
+		//}
+		//else {
+		//analogWrite(do_pwm, 0);
+		//}
 	}
-
-	// Do something when the motor id is right
-	if (incoming_data[in_motorId] == motorId) {
-		//if (true) {
-		if ((incoming_data[in_action] == action_nothingToDo)) {
-			lockAction = false;
-			for (size_t i = 0; i < BYTES_TO_SEND; i++) outgoing_data[i] = 0;
-			// Send motor id every time as alive flag
-			outgoing_data[out_motorId] = motorId;
-		}
-
-		// Check incoming action and set outgoing package
-		if ((!lockAction) & ((incoming_data[in_action] == action_saveRefPosToEeprom) | (incoming_data[in_action] == action_disablePidController) | (incoming_data[in_action] == action_enablePidController) | (incoming_data[in_action] == action_newPosition) | (incoming_data[in_action] == action_saveActPosToEeprom)))
-		{
-			outgoing_data[out_action] = incoming_data[in_action];
-			outgoing_data[out_actionState] = state_pending;
-			outgoing_data[out_motorId] = incoming_data[in_motorId];
-			//Serial.println("package");
-		}
-
-		// Send package back to client
-		sendData(BYTES_TO_SEND, outgoing_data);
-
-		// Wait after send command
-		delay((SAMPLE_TIME / 2) * 1000);
-
-		// Work on action <saveRefPosToEeprom>
-		if ((!lockAction) & (incoming_data[in_action] == action_saveRefPosToEeprom))
-		{
-			// Lock action to prevent simultan call
-			lockAction = true;
-
-			// Write actual motor position as ref pos to eeprom (byte 0 and 1)
-			EEPROM.update(eeprom_addr_ref_pos_1, lowByte(encoderValue));
-			EEPROM.update(eeprom_addr_ref_pos_2, highByte(encoderValue));
-
-			// Validate writing and reset state if position is written to eeprom
-			if ((EEPROM.read(eeprom_addr_ref_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_ref_pos_2) == highByte(encoderValue))) {
-
-				// Save ref pos value to local variable
-				ref_pos.bytes[0] = lowByte(encoderValue);
-				ref_pos.bytes[1] = highByte(encoderValue);
-
-				// TODO: Validate ref pos value (maybe flip the bytes)
-				if (debugMode)
-				{
-					Serial.print("ref_pos.data new: ");
-					Serial.println(ref_pos.data);
-				}
-
-				outgoing_data[out_actionState] = state_complete;
-				EEPROM.update(eeprom_addr_error, error_ok);
-				Serial.println("eeprom");
-			}
-			else EEPROM.update(eeprom_addr_error, error_eeprom_ref_pos); // If there is an error the pending state will never change to complete 
-		}
-
-		// Work on action <safe actual position to eeprom>
-		if ((!lockAction) & (incoming_data[in_action] == action_saveActPosToEeprom))
-		{
-			// Store actual encoder value to eeprom when raspberry pi is off or if someone reset the input signal
-			// Arduino maybe gets the rest of power from a condensator
-
-			lockAction = true;
-			// Write actual motor position to eeprom
-			EEPROM.update(eeprom_addr_act_pos_1, lowByte(encoderValue));
-			EEPROM.update(eeprom_addr_act_pos_2, highByte(encoderValue));
-
-			ist_motorAngle.bytes[0] = EEPROM.read(eeprom_addr_act_pos_1);
-			ist_motorAngle.bytes[1] = EEPROM.read(eeprom_addr_act_pos_2);
-			encoderValue = ist_motorAngle.data;
-
-			// Validate writing 
-			// Store ok byte to eeprom (and read this at startup to validate)
-			if ((EEPROM.read(eeprom_addr_act_pos_1) == lowByte(encoderValue)) & (EEPROM.read(eeprom_addr_act_pos_2) == highByte(encoderValue))) EEPROM.update(eeprom_addr_error, error_ok);
-			else EEPROM.update(eeprom_addr_error, error_eeprom_act_pos);
-			// TODO
-			// Validate act pos value (maybe flip the bytes)
-			//Serial.print("encoderValue di_powerOn: ");
-			//Serial.println(encoderValue);
-		}
-
-		// Work on action <disablePidController>
-		if ((!lockAction) & (incoming_data[in_action] == action_disablePidController))
-		{
-			//lockAction = true;
-			pid_controller_enabled = false;
-			outgoing_data[out_actionState] = state_complete;
-			Serial.println("disablePidController");
-		}
-
-		// Work on action <enablePidController>
-		if ((!lockAction) & (incoming_data[in_action] == action_enablePidController))
-		{
-			//lockAction = true;
-			pid_controller_enabled = true;
-			outgoing_data[out_actionState] = state_complete;
-			Serial.println("enablePidController");
-		}
-
-		// Work on action <newPosition>
-		if ((!lockAction) & (incoming_data[in_action] == action_newPosition))
-		{
-			//lockAction = true;
-			// Convert byte to short 
-			soll_motorAngle.bytes[0] = incoming_data[in_angle_2];
-			soll_motorAngle.bytes[1] = incoming_data[in_angle_1];
-			soll_motor_angle_temp = soll_motorAngle.data;
-
-			//if (incoming_data[in_motorDir] == 0) soll_motor_angle_temp = soll_motor_angle_temp*(-1);
-			//else soll_motor_angle_temp = soll_motor_angle_temp;
-
-			// Control motor with pid
-			if (pid_controller_enabled)
-			{
-				// Convert encoder value to degree
-				current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
-
-				// Add ref pos value to soll motor angle 
-				soll_motor_angle_temp = soll_motorAngle.data + ref_pos.data;
-
-				// Calculate error term (soll - ist)
-				pid_error = current_motor_angle - soll_motor_angle_temp;
-				if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
-
-				// Calculate output for motor
-				double pid_control_value = pidController(pid_error);
-
-				// Set value to zero to send complete state
-				if (pid_error == 0) pid_control_value = 0;
-
-				// Configure direction value for motor
-				// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
-				//if (pid_control_value < 0) {
-				if (incoming_data[in_motorDir] == 0) {
-					digitalWrite(do_motorDirection1, LOW);
-					digitalWrite(do_motorDirection2, HIGH);
-					pid_control_value = pid_control_value;
-				}
-				else {
-					digitalWrite(do_motorDirection1, HIGH);
-					digitalWrite(do_motorDirection2, LOW);
-				}
-
-				// Limit the motor angle to prevent mechanical damage
-				if ((soll_motorAngle.data <= MAX_MOTOR_ANGLE) & (soll_motorAngle.data >= MIN_MOTOR_ANGLE)) {
-					analogWrite(do_pwm, (int)pid_control_value);
-					posOutReached = false;
-				}
-				else {
-					analogWrite(do_pwm, 0);
-					posOutReached = true;
-				}
-
-				// Reset state if position is reached or not reached because of mechanical limit
-				// TODO: Send different state (state eerror stop mechanic...)
-				if (((pid_control_value == 0) | (posOutReached)) & (incoming_data[in_action] == action_newPosition)) {
-					outgoing_data[out_actionState] = state_complete;
-					posOutReached = false;
-				}
-			}
-		}
-	}
-
-	Serial.println(encoderValue);
-}
-
-bool receiveData(byte rxStateIst, byte rxStateSoll)
-{
-	if ((rxStateIst & rxStateSoll) == 1) readControlValue(SPI_INSTRUCTION_READ_RX_BUFFER0, do_csMcp2515);
-	else if ((rxStateIst & rxStateSoll) == 2) readControlValue(SPI_INSTRUCTION_READ_RX_BUFFER1, do_csMcp2515);
-	return true;
-}
-
-void sendData(byte maxByte, byte buffer[]) {
-	for (size_t i = 0; i < maxByte; i++) {
-		mcp2515_load_tx_buffer0(buffer[i], i, maxByte);
-		//Serial.print("outgoing ");
-		//Serial.print(i);
-		//Serial.print(": ");
-		//Serial.println(buffer[i]);
-	}
-	//Serial.print("state: ");
-	//Serial.println(buffer[2]);
-	mcp2515_execute_rts_command(0);
 }
 
 void doEncoderA() {
@@ -462,40 +151,3 @@ void doEncoderB() {
 	}
 }
 
-
-void blinkErrorCode(int error, int waitBefore, int waitAfter) {
-	// Reset led state and wait some time
-	if (waitBefore) setLedState(1000, 0, 0, LED_BUILTIN, LOW);
-
-	// Set specific error code
-	if (error = error_eeprom_act_pos)
-	{
-		setLedState(500, 0, 500, LED_BUILTIN, HIGH);
-		for (size_t i = 0; i < 2; i++) setLedState(200, 0, 200, LED_BUILTIN, HIGH);
-	}
-
-	// Set specific error code
-	if (error = error_eeprom_ref_pos)
-	{
-		setLedState(500, 0, 500, LED_BUILTIN, HIGH);
-		for (size_t i = 0; i < 3; i++) setLedState(200, 0, 200, LED_BUILTIN, HIGH);
-	}
-
-	// Set specific error code
-	if (error = error_eeprom_reset)
-	{
-		setLedState(500, 0, 500, LED_BUILTIN, HIGH);
-		for (size_t i = 0; i < 4; i++) setLedState(200, 0, 200, LED_BUILTIN, HIGH);
-	}
-
-	// Reset led state and wait some time
-	if (waitAfter) setLedState(1000, 0, 0, LED_BUILTIN, LOW);
-}
-
-void setLedState(int blinkLength, int pauseBefore, int pauseAfter, int led, int state) {
-	delay(pauseBefore);
-	digitalWrite(led, state);
-	delay(blinkLength);
-	digitalWrite(led, !state);
-	delay(pauseAfter);
-}
