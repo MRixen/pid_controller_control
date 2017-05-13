@@ -1,14 +1,13 @@
 #define di_encoderPinA 2
 #define di_encoderPinB 3
 #define di_enableController 7
-#define di_motorDirection1 8
-#define di_motorDirection2 10
+#define di_motorDirection1 10
 #define ai_sollAngle A0
 
 #define do_motorDirection1 4
-#define do_motorDirection2 5
+#define do_motorDirection2 4
 #define do_motorStandby 6
-#define do_motorAngle 7
+
 #define do_pwm 9
 
 short pwmValueTemp = 0;

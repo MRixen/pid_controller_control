@@ -2,6 +2,9 @@
 #include "DEFINITIONS.h"
 #include "PID.h"
 
+TwoWire wireSend = TwoWire();
+TwoWire wireReceive = TwoWire();
+
 void setup()
 {
 	// Configure serial interface
@@ -16,6 +19,8 @@ void setup()
 	// Define I/Os
 	pinMode(di_encoderPinA, INPUT);
 	pinMode(di_encoderPinB, INPUT);
+	pinMode(di_motorDirection1, INPUT);
+	pinMode(di_enableController, INPUT);
 	pinMode(do_motorDirection1, OUTPUT);
 	pinMode(do_motorDirection2, OUTPUT);
 	pinMode(do_motorStandby, OUTPUT);
@@ -31,10 +36,12 @@ void setup()
 	attachInterrupt(digitalPinToInterrupt(di_encoderPinB), doEncoderB, CHANGE);
 
 	// Configure I2C Bus
-	Wire.begin(); // join i2c bus (address optional for master)
-	Wire.begin(8);                // join i2c bus with address #8
-	Wire.onReceive(receiveEvent); // register event
-	Wire.onRequest(requestEvent); // register event
+	//Wire.begin(); // join i2c bus (address optional for master)
+	wireReceive.begin(8);
+	wireSend.begin(9);     
+	// join i2c bus with address #8
+	wireReceive.onReceive(receiveEvent); // register event
+	//Wire.onRequest(requestEvent); // register event
 
 	// Give time to set up
 	delay(100);
@@ -55,12 +62,15 @@ void receiveEvent(int howMany) {
 	// TODO: Expand to 2 bytes
 	// Read 1 byte from bus
 	soll_motor_angle_temp = Wire.read();
+	// Make it a negaitve value when direction input value is set to zero
+	if (digitalRead(di_motorDirection1) == LOW) soll_motor_angle_temp = soll_motor_angle_temp*(-1);
+	Serial.println(soll_motor_angle_temp);
 }
 
-void requestEvent() {
-	// Send 2 bytes on bus
-	Wire.write((int)current_motor_angle);
-}
+//void requestEvent() {
+//	// Send 2 bytes on bus
+//	Wire.write((int)current_motor_angle);
+//}
 
 void loop()
 {
@@ -79,28 +89,27 @@ void loop()
 
 	// Configure direction value for motor
 	// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
-	if (pid_control_value < 0) {
-		//if (incoming_data[in_motorDir] == 0) {
-		digitalWrite(do_motorDirection1, LOW);
-		digitalWrite(do_motorDirection2, HIGH);
-		pid_control_value = pid_control_value*(-1);
-	}
-	else {
-		digitalWrite(do_motorDirection1, HIGH);
-		digitalWrite(do_motorDirection2, LOW);
-	}
+	//if (pid_control_value < 0)
+	//{
+	//	pid_control_value = pid_control_value*(-1);
+	//	digitalWrite(do_motorDirection1, LOW);
+	//	digitalWrite(do_motorDirection2, HIGH);
+	//}
+	//else {
+	//	digitalWrite(do_motorDirection1, HIGH);
+	//	digitalWrite(do_motorDirection2, LOW);
+	//}
+
+	if (pid_control_value < 0) pid_control_value = pid_control_value*(-1);
+	digitalWrite(do_motorDirection1, digitalRead(di_motorDirection1));
 
 	// Check if controller is activated
-	if (digitalRead(di_enableController))
-	{
-		// Limit the motor angle to prevent mechanical damage
-		//if ((soll_motorAngle.data <= MAX_MOTOR_ANGLE) & (soll_motorAngle.data >= MIN_MOTOR_ANGLE)) {
-		analogWrite(do_pwm, (int)pid_control_value);
-		//}
-		//else {
-		//analogWrite(do_pwm, 0);
-		//}
+	if (digitalRead(di_enableController)) {
+		wireSend.beginTransmission(9);
+		wireSend.write((int)pid_control_value); // Send 1 byte
+		wireSend.endTransmission();
 	}
+	//if (digitalRead(di_enableController)) analogWrite(do_pwm, (int)pid_control_value);
 }
 
 void doEncoderA() {
