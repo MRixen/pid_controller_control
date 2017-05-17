@@ -1,9 +1,9 @@
 #include <Wire.h>
 #include "DEFINITIONS.h"
 #include "PID.h"
+#include <EEPROM.h>
 
-TwoWire wireSend = TwoWire();
-TwoWire wireReceive = TwoWire();
+double pid_control_value = 0;
 
 void setup()
 {
@@ -12,6 +12,7 @@ void setup()
 
 	// Configure program data
 	firstStart = true;
+	bool eeprom_init_state_ok = true;
 
 	// USER CONFIGURATION
 	debugMode = true;
@@ -30,6 +31,11 @@ void setup()
 
 	// Init
 	soll_motorAngle.data = 0;
+	save_action = 0;
+
+	// init eeprom settings
+	resetEeprom();
+	restoreLastConfig();
 
 	// Attach interrupt for encoder
 	attachInterrupt(digitalPinToInterrupt(di_encoderPinA), doEncoderA, CHANGE);
@@ -37,12 +43,8 @@ void setup()
 
 	// Configure I2C Bus
 	//Wire.begin(); // join i2c bus (address optional for master)
-	wireReceive.begin(8);
-	wireSend.begin(9);     
-	// join i2c bus with address #8
-	wireReceive.onReceive(receiveEvent); // register event
-	//Wire.onRequest(requestEvent); // register event
-
+	Wire.begin(I2C_ID_PID_CONTROLLER);
+	Wire.onReceive(receiveEvent); // register event
 	// Give time to set up
 	delay(100);
 
@@ -58,58 +60,86 @@ void setup()
 	//}
 }
 
-void receiveEvent(int howMany) {
-	// TODO: Expand to 2 bytes
-	// Read 1 byte from bus
-	soll_motor_angle_temp = Wire.read();
-	// Make it a negaitve value when direction input value is set to zero
-	if (digitalRead(di_motorDirection1) == LOW) soll_motor_angle_temp = soll_motor_angle_temp*(-1);
-	Serial.println(soll_motor_angle_temp);
+void receiveEvent(int numBytes) {
+	// Receive 2 bytes (1. angle, 2. save-action
+	for (size_t i = 0; i < numBytes; i++) i2c_data_in[i] = Wire.read();
+
+	save_action = i2c_data_in[1];
+
+	switch (save_action)
+	{
+	case 0:
+		soll_motor_angle_temp = i2c_data_in[0];
+		// Make it a negatve value when direction input value is set to zero
+		if (digitalRead(di_motorDirection1) == LOW) soll_motor_angle_temp = soll_motor_angle_temp*(-1);
+		lockAction = false;
+		break;
+	case 1:
+		if (!lockAction)
+		{
+			lockAction = true;
+
+			if (current_motor_angle < 0) {
+				EEPROM.update(eeprom_addr_ref_pos, current_motor_angle*(-1));
+				EEPROM.update(eeprom_addr_ref_pos_sign, 0);
+			}
+			else {
+				EEPROM.update(eeprom_addr_ref_pos, current_motor_angle);
+				EEPROM.update(eeprom_addr_ref_pos_sign, 1);
+			}
+		}
+		break;
+	case 2:
+		if (!lockAction)
+		{
+			lockAction = true;
+			Serial.print("current_motor_angle: ");
+			Serial.println(current_motor_angle);
+
+			if (current_motor_angle < 0) {
+				EEPROM.update(eeprom_addr_act_pos, current_motor_angle*(-1));
+				EEPROM.update(eeprom_addr_act_pos_sign, 0);
+			}
+			else {
+				EEPROM.update(eeprom_addr_act_pos, current_motor_angle);
+				EEPROM.update(eeprom_addr_act_pos_sign, 1);
+			}
+		}
+		break;
+	default:
+		break;
+	}
 }
 
-//void requestEvent() {
-//	// Send 2 bytes on bus
-//	Wire.write((int)current_motor_angle);
-//}
 
 void loop()
 {
 	// Convert encoder value to degree and set it as output vor pid_can_bus_controller
-	current_motor_angle = encoderValue*ENCODER_TO_DEGREE;
+	current_motor_angle = (encoderValue*ENCODER_TO_DEGREE) + last_motor_angle;
 
 	// Calculate error term (soll - ist)
-	pid_error = current_motor_angle - soll_motor_angle_temp;
+	pid_error = current_motor_angle - (soll_motor_angle_temp + ref_pos);
 	if (abs(pid_error) <= MIN_PID_ERROR) pid_error = 0;
 
 	// Calculate output for motor
-	double pid_control_value = pidController(pid_error);
+	pid_control_value = pidController(pid_error);
 
 	// Set control value to zero when error term is zero
 	if (pid_error == 0) pid_control_value = 0;
 
-	// Configure direction value for motor
-	// Direction input: when DIR is high (negative) current will flow from OUTA to OUTB, when it is low current will flow from OUTB to OUTA (positive).
-	//if (pid_control_value < 0)
-	//{
-	//	pid_control_value = pid_control_value*(-1);
-	//	digitalWrite(do_motorDirection1, LOW);
-	//	digitalWrite(do_motorDirection2, HIGH);
-	//}
-	//else {
-	//	digitalWrite(do_motorDirection1, HIGH);
-	//	digitalWrite(do_motorDirection2, LOW);
-	//}
-
-	if (pid_control_value < 0) pid_control_value = pid_control_value*(-1);
-	digitalWrite(do_motorDirection1, digitalRead(di_motorDirection1));
-
-	// Check if controller is activated
-	if (digitalRead(di_enableController)) {
-		wireSend.beginTransmission(9);
-		wireSend.write((int)pid_control_value); // Send 1 byte
-		wireSend.endTransmission();
+	if (pid_control_value < 0) {
+		pid_control_value = pid_control_value*(-1);
+		digitalWrite(do_motorDirection1, 0);
 	}
-	//if (digitalRead(di_enableController)) analogWrite(do_pwm, (int)pid_control_value);
+	else digitalWrite(do_motorDirection1, 1);
+
+
+	if (digitalRead(di_enableController)) {
+		// Send pid value to monitoring device
+		Wire.beginTransmission(I2C_ID_MONITOR);
+		Wire.write((int)pid_control_value);
+		Wire.endTransmission();
+	}
 }
 
 void doEncoderA() {
@@ -160,3 +190,98 @@ void doEncoderB() {
 	}
 }
 
+void restoreLastConfig() {
+	// Read last encoder value from eeprom
+	last_motor_angle = EEPROM.read(eeprom_addr_act_pos);
+	act_pos_sign = EEPROM.read(eeprom_addr_act_pos_sign);
+
+	// Set sign to act pos value
+	if (act_pos_sign == 0) last_motor_angle = last_motor_angle*(-1);
+
+	if (debugMode) {
+		Serial.print("act_pos last: ");
+		Serial.println(last_motor_angle);
+		Serial.print("act_pos_sign last: ");
+		Serial.println(act_pos_sign);
+	}
+
+	// Read ref pos value and ref pos sign from eeprom
+	ref_pos = EEPROM.read(eeprom_addr_ref_pos);
+	ref_pos_sign = EEPROM.read(eeprom_addr_ref_pos_sign);
+
+	// Set sign to ref pos value
+	if (ref_pos_sign == 0) ref_pos = ref_pos*(-1);
+
+	if (debugMode) {
+		Serial.print("ref_pos last: ");
+		Serial.println(ref_pos);
+		Serial.print("ref_pos_sign last: ");
+		Serial.println(ref_pos_sign);
+	}
+
+}
+
+void resetEeprom() {
+	// Reset eeprom at first start
+	if (EEPROM.read(5) != 0) // At first start this all eeprom bytes are 255
+	{
+		Serial.println("Reset eeprom.");
+
+		// Write zeros
+		for (size_t i = 0; i < 6; i++) EEPROM.write(i, 0);  //EEPROM.update(i, 0);
+
+		// Check written data
+		for (size_t i = 0; i < 6; i++) if (EEPROM.read(i) != 0) eeprom_init_state_ok = false;
+
+		// Show write state as blink code
+		while (!eeprom_init_state_ok) blinkErrorCode(error_eeprom_reset, true, false);
+
+		// Stop program execution
+		Serial.println("Ready reset eeprom.");
+	}
+
+	// Check error on eeprom writing process (ref or act position)
+	int value_eeprom = EEPROM.read(eeprom_addr_error);
+	if (value_eeprom != error_ok) {
+		// WHen there is an error stop the following operations and set the specific error code
+		while (true) blinkErrorCode(value_eeprom, true, false);
+	}
+}
+
+
+void blinkErrorCode(int error, int waitBefore, int waitAfter) {
+	// Reset led state and wait some time
+	if (waitBefore) setLedState(1000, 0, 0, LED_BUILTIN, LOW);
+
+	// Set specific error code
+	if (error = error_eeprom_act_pos)
+	{
+		setLedState(500, 0, 500, LED_BUILTIN, HIGH);
+		for (size_t i = 0; i < 2; i++) setLedState(200, 0, 200, LED_BUILTIN, HIGH);
+	}
+
+	// Set specific error code
+	if (error = error_eeprom_ref_pos)
+	{
+		setLedState(500, 0, 500, LED_BUILTIN, HIGH);
+		for (size_t i = 0; i < 3; i++) setLedState(200, 0, 200, LED_BUILTIN, HIGH);
+	}
+
+	// Set specific error code
+	if (error = error_eeprom_reset)
+	{
+		setLedState(500, 0, 500, LED_BUILTIN, HIGH);
+		for (size_t i = 0; i < 4; i++) setLedState(200, 0, 200, LED_BUILTIN, HIGH);
+	}
+
+	// Reset led state and wait some time
+	if (waitAfter) setLedState(1000, 0, 0, LED_BUILTIN, LOW);
+}
+
+void setLedState(int blinkLength, int pauseBefore, int pauseAfter, int led, int state) {
+	delay(pauseBefore);
+	digitalWrite(led, state);
+	delay(blinkLength);
+	digitalWrite(led, !state);
+	delay(pauseAfter);
+}

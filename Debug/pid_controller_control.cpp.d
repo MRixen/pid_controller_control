@@ -14,4 +14,5 @@ C:\Users\Manuel.Rixen\AppData\Local\Temp\VMicroBuilds\pid_controller_control\uno
  C:\Program\ Files\ (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\Wire\src/Wire.h \
  C:\Program\ Files\ (x86)\arduino-1.6.9\hardware\arduino\avr\cores\arduino/Stream.h \
  C:\Users\Manuel.Rixen\AppData\Local\Temp\VMicroBuilds\pid_controller_control\uno\DEFINITIONS.h \
- C:\Users\Manuel.Rixen\AppData\Local\Temp\VMicroBuilds\pid_controller_control\uno\PID.h
+ C:\Users\Manuel.Rixen\AppData\Local\Temp\VMicroBuilds\pid_controller_control\uno\PID.h \
+ C:\Program\ Files\ (x86)\arduino-1.6.9\hardware\arduino\avr\libraries\EEPROM\src/EEPROM.h
