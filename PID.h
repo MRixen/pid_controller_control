@@ -54,6 +54,7 @@ double N = 4.6424770619278;
 // -----------------------------------------
 const double ENCODER_TO_DEGREE = 1;
 double soll_motor_angle_temp = 0; // deg
+double soll_motorSpeed = 0; // %
 double pid_error;
 double current_motor_angle = 0;
 double p_term = 0;

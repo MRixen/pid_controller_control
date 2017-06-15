@@ -61,7 +61,7 @@ void setup()
 }
 
 void receiveEvent(int numBytes) {
-	// Receive 2 bytes (1. angle, 2. save-action
+	// Receive 3 bytes (1. angle, 2. save-action, 3. speed)
 	for (size_t i = 0; i < numBytes; i++) i2c_data_in[i] = Wire.read();
 
 	save_action = i2c_data_in[1];
@@ -70,7 +70,9 @@ void receiveEvent(int numBytes) {
 	{
 	case 0:
 		soll_motor_angle_temp = i2c_data_in[0];
-		// Make it a negatve value when direction input value is set to zero
+		soll_motorSpeed = i2c_data_in[2];
+
+		// Make it a negative value when direction input value is set to zero
 		if (digitalRead(di_motorDirection1) == LOW) soll_motor_angle_temp = soll_motor_angle_temp*(-1);
 		lockAction = false;
 		break;
@@ -114,8 +116,9 @@ void receiveEvent(int numBytes) {
 
 void loop()
 {
-	// Convert encoder value to degree and set it as output vor pid_can_bus_controller
+	// Convert encoder value to degree and set it as output for pid_can_bus_controller
 	current_motor_angle = (encoderValue*ENCODER_TO_DEGREE) + last_motor_angle;
+
 
 	// Calculate error term (soll - ist)
 	pid_error = current_motor_angle - (soll_motor_angle_temp + ref_pos);
@@ -128,10 +131,16 @@ void loop()
 	if (pid_error == 0) pid_control_value = 0;
 
 	if (pid_control_value < 0) {
+		Serial.println(pid_control_value);
+
 		pid_control_value = pid_control_value*(-1);
 		digitalWrite(do_motorDirection1, 0);
 	}
-	else digitalWrite(do_motorDirection1, 1);
+	else {
+		digitalWrite(do_motorDirection1, 1);
+	}
+
+	pid_control_value = ((pid_control_value/100)*soll_motorSpeed);
 
 
 	if (digitalRead(di_enableController)) {
@@ -139,6 +148,9 @@ void loop()
 		Wire.beginTransmission(I2C_ID_MONITOR);
 		Wire.write((int)pid_control_value);
 		Wire.endTransmission();
+		//Serial.println(current_motor_angle);
+		//Serial.println(digitalRead(do_motorDirection1));
+
 	}
 }
 

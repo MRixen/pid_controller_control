@@ -4,7 +4,7 @@
 #define di_motorDirection1 10
 #define ai_sollAngle A0
 
-#define do_motorDirection1 4
+#define do_motorDirection1 8
 #define do_motorDirection2 4
 #define do_motorStandby 6
 
@@ -73,8 +73,8 @@ union controlData_5b
 };
 
 controlData_2b soll_motorAngle, ist_motorAngle;
-byte i2c_data_in[2] = { 0x00, 0x00};
-byte i2c_data_out[1] = {0x00};
+byte i2c_data_in[3] = { 0x00, 0x00, 0x00};
+byte i2c_data_out[2] = {0x00, 0x00};
 
 int ref_pos = 0;
 int ref_pos_sign = 0;
