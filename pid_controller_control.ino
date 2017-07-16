@@ -4,6 +4,7 @@
 #include <EEPROM.h>
 
 double pid_control_value = 0;
+bool reset_eeprom_manual;
 
 void setup()
 {
@@ -12,10 +13,12 @@ void setup()
 
 	// Configure program data
 	firstStart = true;
-	bool eeprom_init_state_ok = true;
+	eeprom_init_state_ok = true;
+
 
 	// USER CONFIGURATION
 	debugMode = true;
+	reset_eeprom_manual = false;
 
 	// Define I/Os
 	pinMode(di_encoderPinA, INPUT);
@@ -65,6 +68,7 @@ void receiveEvent(int numBytes) {
 	for (size_t i = 0; i < numBytes; i++) i2c_data_in[i] = Wire.read();
 
 	save_action = i2c_data_in[1];
+
 
 	switch (save_action)
 	{
@@ -142,9 +146,11 @@ void loop()
 
 	pid_control_value = ((pid_control_value/100)*soll_motorSpeed);
 
-
 	if (digitalRead(di_enableController)) {
 		// Send pid value to monitoring device
+		//Serial.print("pid_control_value: ");
+		//Serial.println((int)pid_control_value);
+
 		Wire.beginTransmission(I2C_ID_MONITOR);
 		Wire.write((int)pid_control_value);
 		Wire.endTransmission();
@@ -235,7 +241,7 @@ void restoreLastConfig() {
 
 void resetEeprom() {
 	// Reset eeprom at first start
-	if (EEPROM.read(5) != 0) // At first start this all eeprom bytes are 255
+	if ((EEPROM.read(5) != 0) | reset_eeprom_manual) // At first start this all eeprom bytes are 255
 	{
 		Serial.println("Reset eeprom.");
 
